@@ -86,11 +86,11 @@ def set_xgboost_model(X_train: pd.DataFrame, y_train: pd.Series[float],
 
     return model
 
-def set_position_models(df_seasons_merged: pd.DataFrame,
+def set_position_models(df_features_past: pd.DataFrame,
     test_season: str | None = None) -> dict[str, XGBRegressor]:
     """Set an XGBoost regression model each player position.
     Args:
-        df_seasons_merged: The pd.DataFrame containing all past seasons data.
+        df_features_past: The pd.DataFrame containing all past seasons data.
         test_season (optional): The FPL season from which test data are chosen.
             Defaults to None (using all data for training).
     Returns:
@@ -100,10 +100,10 @@ def set_position_models(df_seasons_merged: pd.DataFrame,
 
     for pos, ft in ML_FEATURES_DICT.items():
 
-        df: pd.DataFrame = df_seasons_merged[df_seasons_merged['position_name'] == pos]
+        df: pd.DataFrame = df_features_past[df_features_past['position_name'] == pos]
 
         X_train, _, y_train, _ = split_seasons_data(
-            df_seasons_merged=df, features_columns=ft, target_column='PTS_GW', test_season=test_season)
+            df_seasons_merged=df, features_columns=ft, target_column='PTS', test_season=test_season)
 
         models_dict[pos] = set_xgboost_model(X_train=X_train, y_train=y_train,
                                             n_estimators=100, max_depth=3, learning_rate=0.1)
@@ -124,12 +124,12 @@ def get_features_importances(models_dict: dict[str, XGBRegressor]
 
     return importances
 
-def evaluate_position_models(df_seasons_merged: pd.DataFrame,
+def evaluate_position_models(df_features_past: pd.DataFrame,
     models_dict: dict[str, XGBRegressor], test_season: str) -> dict[str, dict[str, float]]:
     """Evaluate the XGBoost regression model metrics for each player position
     along with the baseline metrics.
     Args:
-        df_seasons_merged: The pd.DataFrame containing all past seasons data.
+        df_features_past: The pd.DataFrame containing all past seasons data.
         models_dict: The dictionary of fitted XGBoost model objects.
         test_season: The FPL season from which test data are chosen.
     Returns:
@@ -139,15 +139,15 @@ def evaluate_position_models(df_seasons_merged: pd.DataFrame,
 
     for pos, ft in ML_FEATURES_DICT.items():
 
-        df: pd.DataFrame = df_seasons_merged[df_seasons_merged['position_name'] == pos]
+        df: pd.DataFrame = df_features_past[df_features_past['position_name'] == pos]
 
         _, X_test_base, _, y_test_base = split_seasons_data(
-            df_seasons_merged=df, features_columns=['xPTS_GW'], target_column='PTS_GW', test_season=test_season)
+            df_seasons_merged=df, features_columns=['PTS_form'], target_column='PTS', test_season=test_season)
 
-        metrics_dict[pos+'_base'] = evaluate_model_predictions(y_true=y_test_base, y_pred=X_test_base['xPTS_GW'])
+        metrics_dict[pos+'_base'] = evaluate_model_predictions(y_true=y_test_base, y_pred=X_test_base['PTS_form'])
 
         _, X_test, _, y_test = split_seasons_data(
-            df_seasons_merged=df, features_columns=ft, target_column='PTS_GW', test_season=test_season)
+            df_seasons_merged=df, features_columns=ft, target_column='PTS', test_season=test_season)
 
         y_pred = models_dict[pos].predict(X_test)
 
@@ -155,46 +155,92 @@ def evaluate_position_models(df_seasons_merged: pd.DataFrame,
 
     return metrics_dict
 
-def set_fpl_ml_predictions(df_players_features: pd.DataFrame,
+def set_fpl_ml_predictions(df_features: pd.DataFrame,
                         models_dict: dict[str, XGBRegressor]) -> pd.DataFrame:
     """Set FPL predictions for each player based on the ML model for each position.
     Args:
-        df_players_features: The pd.DataFrame containing the FPL features data.
+        df_features: The pd.DataFrame containing the FPL features data.
         models_dict: The dictionary of fitted XGBoost model objects.
     Returns:
         A pd.DataFrame containing the ML predictions for FPL points for each player."""
 
-    df = df_players_features.copy()
+    df = df_features.copy()
 
-    df['xP_predicted'] = predict_expected_points(df_players_features=df, models_dict=models_dict)
+    df['xP_predicted'] = predict_expected_points(df_features=df, models_dict=models_dict)
 
     df = df.groupby('code', as_index=False).agg(
         player_name=('player_name', 'first'), position_name=('position_name', 'first'),
-        team_name=('team_name', 'first'), availability=('availability', 'first'),
-        now_cost=('now_cost', 'first'), xP_predicted_sum=('xP_predicted', 'sum'),
+        team_name=('team_name', 'first'), now_cost=('now_cost', 'first'),
+        # availability=('availability', 'first'),
+        xP_predicted_sum=('xP_predicted', 'sum'),
         # xP_FPL_sum=('xP_FPL', 'sum'),
         )
     df = df.sort_values(by=['team_name', 'position_name'], ascending=[True, True])
 
     return df.copy()
 
-def predict_expected_points(df_players_features: pd.DataFrame,
-                            models_dict: dict[str, XGBRegressor]) -> pd.Series[float]:
+def predict_expected_points(
+    df_features: pd.DataFrame, models_dict: dict[str, XGBRegressor]
+    ) -> pd.Series[float]:
     """Predict player points using the ML model for each player position.
     Args:
-        df_players_features: The pd.DataFrame containing current season data.
+        df_features: The pd.DataFrame containing current season data.
         models_dict: The dictionary of fitted XGBoost model objects.
     Returns:
         The pd.Series containing the 'xP_predicted' column."""
 
-    xP: pd.Series[float] = pd.Series(index=df_players_features.index, dtype=float)
+    xP = pd.Series(index=df_features.index, dtype=float)
 
     for pos, ft in ML_FEATURES_DICT.items():
 
-        rows: pd.Series[bool] = (df_players_features['position_name'] == pos)
+        rows = (df_features['position_name'] == pos)
 
-        X_test: pd.DataFrame = df_players_features.loc[rows, ft].copy()
+        X_test: pd.DataFrame = df_features.loc[rows, ft].copy()
 
         xP[rows] = models_dict[pos].predict(X_test)
 
     return xP
+
+def check_outliers(self, columns: list[str], iqr_value: float = 1.5) -> pd.DataFrame:
+    """Returns a pd.DataFrame of boolean values for outliers in the specified columns
+    of a pd.DataFrame (df). The outliers are calculated based on the IQR rule.
+    Args:
+        df: The pd.DataFrame to be studied.
+        columns: The list of columns to be examined.
+        iqr_value (optional): The value of the IQR multiplier.
+    Returns:
+        A pd.DataFrame with boolean flags indicating outliers in the specified columns of df."""
+
+    df_stats: pd.DataFrame = self.df[columns].describe()
+
+    upper_bound: pd.DataFrame = df_stats.loc['75%'] + iqr_value*(df_stats.loc['75%'] - df_stats.loc['25%'])
+    lower_bound: pd.DataFrame = df_stats.loc['25%'] - iqr_value*(df_stats.loc['75%'] - df_stats.loc['25%'])
+
+    df_out: pd.DataFrame = self.df.copy()
+
+    for c in columns:
+        df_out[c+'_is_outlier'] = (df_out[c] > upper_bound[c]) | (df_out[c] < lower_bound[c])
+
+    # seaborn.boxplot(data=df_out, y='total_points')
+    # plt.show()
+
+    # By position
+    # group = df_out.groupby('position_name').agg({'total_points': 'mean'})
+    # seaborn.boxplot(data=df_out, x='position_name', y='total_points')
+    # plt.show()
+    # print(group.sort_values('total_points', ascending=False))
+
+    return df_out
+
+def check_multi_co_linearity(self) -> None:
+    """Computes the correlation matrix and displays the corresponding heatmap.
+    Args:
+        columns: The list of columns of df to be checked.
+    """
+
+    columns = self.features_columns
+    cor_matrix: pd.DataFrame = self.df[columns].corr()
+    # print(cor_matrix)
+
+    # seaborn.heatmap(data=cor_matrix, annot=True)
+    # plt.show()

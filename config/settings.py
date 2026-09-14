@@ -3,59 +3,123 @@ from pydantic import BaseModel, Field
 
 POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 
-# 'influence', 'creativity', 'threat', 'ict_index', 'starts'
-# 'recoveries', 'tackles', 'clearances_blocks_interceptions'
-# 'bps', 'total_points', 'points_per_game', 'form', 'event_points'
-# 'value_form', 'value_season'
 # 'corners_and_indirect_freekicks_order', 'direct_freekicks_order', 'penalties_order'
-COLUMNS_KEEP = [
-    'web_name', 'now_cost', 'minutes', 'expected_goals_per_90',
-    'expected_assists_per_90', 'expected_goals_conceded_per_90', 'clean_sheets',
-    'defensive_contribution', 'saves', 'yellow_cards', 'red_cards',
-    'penalties_missed', 'penalties_saved', 'own_goals', 'bonus',
-    'chance_of_playing_next_round', 'code', 'event_points',
-    'can_select', 'status', 'team', 'element_type',
+PLAYERS_COLUMNS_KEEP = [
+    'web_name', 'now_cost', 'chance_of_playing_next_round', 'code', 'id',
+    'can_select', 'status', 'team', 'element_type', 'event_points',
     # 'ep_next'
     ]
-
-COLUMNS_RENAME = {
-    'web_name': 'player_name', 'minutes': 'MIN',
-    'expected_goals_per_90': 'xG_per_90', 'expected_assists_per_90': 'xA_per_90',
-    'expected_goals_conceded_per_90': 'xGC_per_90', 'clean_sheets': 'CS',
-    'defensive_contribution': 'DC', 'saves': 'SA', 'yellow_cards': 'YC',
-    'red_cards': 'RC', 'penalties_missed': 'PM', 'penalties_saved': 'PS',
-    'own_goals': 'OG', 'bonus': 'BP',
-    'chance_of_playing_next_round': 'availability',
-    'event_points': 'PTS_GW',
+PLAYERS_COLUMNS_RENAME = {
+    'web_name': 'player_name', 'id': 'player_id',
+    'chance_of_playing_next_round': 'availability', 'team': 'team_id',
+    'event_points': 'PTS',
     # 'ep_next': 'xP_FPL'
     }
 
-EXCLUDED_FROM_NEGATIVE = ['change', 'balance', 'xP', 'bps', 'points', 'form', 'value', 'PTS']
+TEAMS_COLUMNS_KEEP = [
+    'id', 'short_name',
+    # 'strength_attack_home', 'strength_attack_away',
+    # 'strength_defence_home', 'strength_defence_away'
+    ]
+TEAMS_COLUMNS_RENAME = {
+    "id": "team_id", "short_name": "team_name",
+    # 'strength_attack_home': 'OFF_home', 'strength_attack_away': 'OFF_away',
+    # 'strength_defence_home': 'DEF_home', 'strength_defence_away': 'DEF_away'
+    }
 
-# No 'xPTS_GW'
-ML_FEATURES_DICT: dict[str, list[str]] = {
-    'GKP': ['xMIN', 'xGC', 'xCS', 'xBP', 'xSA', 'xYC', 'xRC', 'xPS', 'xOG', 'FDR_def',
-        #     'xPTS_GW'
+FIXTURES_COLUMNS_KEEP = ['finished', 'event', 'team_a', 'team_h']
+FIXTURES_COLUMNS_RENAME = {'event': 'GW'}
+
+PLAYERS_GW_COLUMNS_KEEP = [
+    'element', 'total_points', 'round', 'minutes',
+    'expected_goals', 'expected_assists', 'expected_goals_conceded',
+    'clean_sheets', 'defensive_contribution', 'saves', 'yellow_cards',
+    'red_cards', 'penalties_missed', 'penalties_saved', 'own_goals', 'bonus',
+    ]
+PLAYERS_GW_COLUMNS_RENAME = {
+    'element': 'player_id', 'total_points': 'PTS', 'round': 'GW', 'minutes': 'MIN',
+    'expected_goals': 'xG', 'expected_assists': 'xA',
+    'expected_goals_conceded': 'xGC', 'clean_sheets': 'CS',
+    'defensive_contribution': 'DC', 'saves': 'SA', 'yellow_cards': 'YC',
+    'red_cards': 'RC', 'penalties_missed': 'PM', 'penalties_saved': 'PS',
+    'own_goals': 'OG', 'bonus': 'BP'
+    }
+
+# expected values from 2022-23, DC from 2025-26
+PAST_SEASONS = ['2022-23', '2023-24', '2024-25', '2025-26']
+
+# missing 'code', 'team_id'
+SEASONS_COLUMNS_KEEP = [
+    'name', 'position', 'team', 'bonus', 'clean_sheets', 'expected_assists',
+    'expected_goals', 'expected_goals_conceded', 'minutes', 'own_goals', 'penalties_missed',
+    'penalties_saved', 'red_cards', 'yellow_cards', 'saves', 'total_points',
+    'GW', 'opponent_team', 'was_home', 'element',
+    # 'defensive_contribution'
+    ]
+SEASONS_COLUMNS_RENAME = {
+    'name': 'player_name', 'position': 'position_name', 'element': 'player_id', 'minutes': 'MIN',
+    'expected_goals': 'xG', 'expected_assists': 'xA', 'expected_goals_conceded': 'xGC',
+    'clean_sheets': 'CS', 'saves': 'SA', 'yellow_cards': 'YC', 'red_cards': 'RC',
+    'penalties_missed': 'PM', 'penalties_saved': 'PS', 'own_goals': 'OG', 'bonus': 'BP',
+    'total_points': 'PTS', 'opponent_team': 'opponent_team_id', 'was_home': 'is_home',
+    # 'defensive_contribution': 'DC'
+    }
+
+SEASONS_TEAMS_COLUMNS_KEEP = [
+    'id', 'name', 'short_name', 'strength_attack_home', 'strength_attack_away',
+    'strength_defence_home', 'strength_defence_away'
+    ]
+SEASONS_TEAMS_COLUMNS_RENAME = {
+    'id': 'team_id', 'name': 'team', 'short_name': 'team_name',
+    'strength_attack_home': 'OFF_home', 'strength_attack_away': 'OFF_away',
+    'strength_defence_home': 'DEF_home', 'strength_defence_away': 'DEF_away'
+    }
+
+EXCLUDED_FROM_NEGATIVE_CHECK = ['change', 'balance', 'xP', 'bps', 'points', 'form', 'value', 'PTS']
+
+FEATURES_FORM = [
+    'MIN', 'CS', 'BP', 'SA', 'YC', 'RC', 'PTS',
+    'PM', 'PS', 'OG', 'xG', 'xA', 'xGC',
+    # 'DC'
+    ]
+
+PREDICTION_MODEL = 'xgboost'
+
+ML_FEATURES_DICT = {
+    'GKP': ['MIN_form', 'xGC_form', 'CS_form', 'BP_form', 'SA_form', 'YC_form', 'RC_form',
+            'PS_form', 'OG_form', 'FDR_def',
+        #     'PTS_form'
             ],
-    'DEF': ['xMIN', 'xG', 'xA', 'xGC', 'xCS', 'xBP', 'xYC', 'xRC', 'xPM', 'xOG', 'FDR_def', 'FDR_off',
-        #     'xPTS_GW'
+    'DEF': ['MIN_form', 'xG_form', 'xA_form', 'xGC_form', 'CS_form', 'BP_form',
+            'YC_form', 'RC_form', 'PM_form', 'OG_form', 'FDR_def', 'FDR_off',
+        #     'PTS_form'
             ],
-    'MID': ['xMIN', 'xG', 'xA', 'xCS', 'xBP', 'xYC', 'xRC', 'xPM', 'xOG', 'FDR_def', 'FDR_off',
-        #     'xPTS_GW'
+    'MID': ['MIN_form', 'xG_form', 'xA_form', 'CS_form', 'BP_form', 'YC_form', 'RC_form',
+            'PM_form', 'OG_form', 'FDR_def', 'FDR_off',
+        #     'PTS_form'
             ],
-    'FWD': ['xMIN', 'xG', 'xA', 'xBP', 'xYC', 'xRC', 'xPM', 'xOG', 'FDR_off',
-        #     'xPTS_GW'
+    'FWD': ['MIN_form', 'xG_form', 'xA_form', 'BP_form', 'YC_form', 'RC_form', 'PM_form',
+            'OG_form', 'FDR_off',
+        #     'PTS_form'
             ]
 }
 
 
 class FPLSettings(BaseModel):
 
+    live_url: str = Field(default="https://fantasy.premierleague.com/api/bootstrap-static/")
+    fixtures_url: str = Field(default="https://fantasy.premierleague.com/api/fixtures/")
+    gw_url: str = Field(default="https://fantasy.premierleague.com/api/element-summary/")
+
+    past_url: str = Field(default="https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data/")
+    past_players_suffix: str = Field(default="/gws/merged_gw.csv")
+    past_teams_suffix: str = Field(default="/teams.csv")
+
     n_form: int = Field(default=3, gt=0)
 
     n_fixtures: int = Field(default=3, ge=1)
 
-    metric: str = Field(default='xP_FPL_sum')
+    metric: str = Field(default="xP_Predicted_sum")
 
     total_budget: float = Field(default=1000, gt=0)
 
