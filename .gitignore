@@ -3,3 +3,5 @@ fpl_data/
 venv/
 notes/
 __pycache__
+info.log
+**/.ipynb_checkpoints/

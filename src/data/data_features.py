@@ -1,144 +1,89 @@
 
+import numpy as np
 import pandas as pd
+from pydantic import BaseModel, model_validator
+
+
+class Bounds(BaseModel):
+    """Class to define numerical boundaries for a variable."""
+    lower: float
+    upper: float
+
+    @model_validator(mode='after')
+    def check_bounds(self) -> Bounds:
+        """Check if the upper field is correctly larger than the lower field.
+        Runs after validating lower, upper individually.
+        Raises:
+            ValueError: If self.lower > self.upper."""
+        if self.lower > self.upper:
+            raise ValueError(f"lower bound {self.lower} cannot exceed upper bound {self.upper}")
+        return self
+
 
 class DataFeatures:
+    """Class to add general data features in a pd.DataFrame."""
 
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame) -> None:
+        """Initialize a DataFeatures instance with the pd.DataFrame to add features on.
+        Args:
+            df: The pd.DataFrame to add features on."""
 
         self.df = df.copy()
 
-    def columns_in_df(self, columns: list[str]) -> None:
-        """Check if all specified columns are present in a pd.DataFrame.
+    def _columns_in_df(self, columns: list[str]) -> None:
+        """Check if all specified columns are present in the pd.DataFrame.
         Args:
-            columns: The columns names to check."""
+            columns: The list of columns names to check.
+        Raises:
+            KeyError: If any columns are missing from self.pd.DataFrame."""
 
-        for c in columns:
-            if c not in self.df.columns:
-                raise KeyError(f"Column {c} not in pd.DataFrame!")
+        missing = set(columns) - set(self.df.columns)
+        if missing:
+            raise KeyError(f"The following columns were not found in the DataFrame: {sorted(missing)}")
 
-    def replace_columns(self, columns: list[str], new_columns: list[str]) -> None:
-        """Replace the specified columns of a pd.DataFrame with the
-        specified new columns of the same pd.DataFrame.
-        Args:
-            columns: The list of column names to be replaced.
-            new_columns: The list of column names to replace with."""
-
-        self.df[columns] = self.df[new_columns]
-
-        self.df = self.df.drop(columns=new_columns)
-
-        rename_dict: dict[str, str] = dict(zip(columns, new_columns))
-        self.df = self.df.rename(columns=rename_dict)
-
-        return None
-
-    def calculate_expected_from_total(self, columns: list[str], n: int) -> None:
-        """Calculate the expected values as the mean from total stats.
-        Args:
-            columns: The list of column names containing total stats.
-            n: The number of data comprising the total stat."""
-
-        self.columns_in_df(columns=columns)
-
-        n: int = max(n, 1)
-
-        for c in columns:
-            self.df['x'+c] = (self.df[c]/n).clip(lower=0.0).fillna(0.0)
-
-        return None
-
-    def convert_to_expected_from_total(self, columns: list[str], n: int) -> None:
-        """Convert (replace) the total values to expected (as mean) from total stats.
-        Args:
-            columns: The list of column names to perform the calculation.
-            n: The number of data comprising the total stat."""
-
-        self.calculate_expected_from_total(columns=columns, n=n)
-
-        new_columns: list[str] = ['x'+c for c in columns]
-
-        self.replace_columns(columns=columns, new_columns=new_columns)
-
-        return None
-
-    def calculate_per_x(self, columns: list[str], x_col: str, x: float = 90.0) -> None:
-        """Calculate per_x normalized values for the specified columns
-        of a pd.DataFrame.
+    def calculate_per_x(self, columns: list[str], x_col: str, x: float) -> None:
+        """Calculate per_x normalized values for the specified columns of the pd.DataFrame.
         Args:
             columns: The list of column names whose values to modify.
             x_col: The column name of the normalization variable.
-            x (optional): The normalization value. Defaults to 90."""
+            x: The normalization value."""
 
-        self.columns_in_df(columns=[x_col])
-        self.columns_in_df(columns=columns)
+        self._columns_in_df(columns=[x_col])
+        self._columns_in_df(columns=columns)
 
+        suffix = '_per_' + str(int(x))
         for c in columns:
-            self.df[c+'_per_'+str(int(x))] = (x*self.df[c]/self.df[x_col]).fillna(value=0.0)
+            new_c = c + suffix
+            self.df[new_c] = ((x*self.df[c]/self.df[x_col])
+                              .replace([np.inf, -np.inf], 0.0).fillna(value=0.0))
 
         return None
 
-    def convert_to_per_x(self, columns: list[str], x_col: str, x: float = 90.0) -> None:
-        """Convert (replace) specified columns of a pd.DataFrame
-        with the corresponding per_x normalized values.
-        Args:
-            columns: The list of column names whose values to modify.
-            x_col: The column name of the normalization variable.
-            x (optional): The normalization value. Defaults to 90."""
-
-        self.calculate_per_x(columns=columns, x_col=x_col, x=x)
-
-        new_columns: list[str] = [c+'_per_'+str(int(x)) for c in columns]
-
-        self.replace_columns(columns=columns, new_columns=new_columns)
-
-        return None
-
-    def calculate_from_per_x(self, columns: list[str], x_col: str, x: float = 90.0) -> None:
-        """Calculate values from per_x normalized values
-        for the specified columns of a pd.DataFrame.
+    def calculate_from_per_x(self, columns: list[str], x_col: str, x: float) -> None:
+        """Calculate values from per_x normalized values for the specified columns of the pd.DataFrame.
         Args:
             columns: The list of column names to use for the calculations.
             x_col: The column name of the normalization variable.
-            x (optional): The normalization value. Defaults to 90."""
+            x: The normalization value."""
 
-        self.columns_in_df(columns=[x_col])
-        self.columns_in_df(columns=columns)
+        self._columns_in_df(columns=[x_col])
+        self._columns_in_df(columns=columns)
 
+        suffix = '_per_' + str(int(x))
         for c in columns:
-            suffix: str = '_per_'+str(int(x))
-            new_c: str = c.removesuffix(suffix)
-            self.df[new_c] = (self.df[c]*self.df[x_col]/x).fillna(value=0.0)
+            new_c = c.removesuffix(suffix)
+            self.df[new_c] = ((self.df[c]*self.df[x_col]/x)
+                              .replace([np.inf, -np.inf], 0.0).fillna(value=0.0))
 
         return None
 
-    def convert_from_per_x(self, columns: list[str],
-                        x_col: str, x: float = 90.0) -> None:
-        """Calculate values from per_x normalized values
-        for the specified columns of a pd.DataFrame.
-        Args:
-            columns: The list of column names to use for the calculations.
-            x_col: The column name of the normalization variable.
-            x (optional): The normalization value. Defaults to 90."""
-
-        self.calculate_from_per_x(columns=columns, x_col=x_col, x=x)
-
-        new_columns: list[str] = []
-        for c in columns:
-            suffix: str = '_per_'+str(int(x))
-            new_c: str = c.removesuffix(suffix)
-            new_columns.append(new_c)
-
-        self.replace_columns(columns=columns, new_columns=new_columns)
-
-        return None
-
-    def set_features_bounds(self, bounds_dict: dict[str, list[float]]) -> None:
-        """Set numerical bounds on the specified columns of a pd.DataFrame.
+    def set_features_bounds(self, bounds_dict: dict[str, Bounds]) -> None:
+        """Set numerical bounds on the specified columns of the pd.DataFrame.
         Args:
             bounds_dict: The dictionary mapping column names with lower and upper bounds."""
 
-        for key, value in bounds_dict.items():
-            c, u, l = key, value[0], value[1]
+        for c, bounds in bounds_dict.items():
+            l, u = bounds.lower, bounds.upper
             self.df[c] = self.df[c].clip(lower=l, upper=u)
 
         return None
