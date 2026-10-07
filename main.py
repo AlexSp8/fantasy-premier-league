@@ -38,7 +38,7 @@ def main() -> None:
     # Add Features players, seasons
     df_features, df_features_past = features.add_features(
         df_players=df_players, players_past_data=players_past_data,
-        n_form=fpl_settings.n_form, store=True
+        fpl_settings=fpl_settings, store=True
         )
 
     # Predict

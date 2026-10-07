@@ -23,33 +23,37 @@ def prepare_players_live_data(
     Raises:
         ValueError: If the pd.DataFrame contains not-allowed negative entries."""
 
-    df_players = pd.DataFrame(data=live_data["elements"])
+    df_players = pd.DataFrame(data=live_data[settings.Columns.PLAYERS])
 
     df_players = keep_necessary_players_live_data(df_players=df_players)
 
     df_players.rename(columns=settings.PLAYERS_COLUMNS_RENAME, inplace=True)
 
-    df_players['position_name'] = (df_players['element_type'].map(settings.POSITION_MAP))
+    df_players[settings.Columns.POSITION_NAME] = (df_players[settings.Columns.POSITION_ID]
+                                                  .map(settings.POSITION_MAP))
 
     # GW, opp_id, is_home
     df_players = add_fixtures_live_data(
-        df_players=df_players, fixtures_data=live_data["fixtures"],
+        df_players=df_players, fixtures_data=live_data[settings.Columns.FIXTURES],
         n_fixtures=fpl_settings.n_fixtures
         )
 
     # team_name, team_id_opp, team_name_opp
-    df_players = add_teams_live_data(df_players, teams_data=live_data["teams"])
-    df_players.drop(columns=['team_id', 'opp_id', 'team_id_opp'], inplace=True)
+    df_players = add_teams_live_data(df_players, teams_data=live_data[settings.Columns.TEAMS])
+    df_players.drop(
+        columns=[settings.Columns.TEAM_ID, settings.Columns.OPP_ID, settings.Columns.TEAM_ID+'_opp'],
+        inplace=True)
 
-    (df_players.sort_values(by=['GW', 'team_name', 'element_type'],
-                            ascending=[True, True, True], inplace=True))
-    df_players.drop(columns='element_type', inplace=True)
+    (df_players.sort_values(
+        by=[settings.Columns.GW, settings.Columns.TEAM_NAME, settings.Columns.POSITION_ID],
+        ascending=[True, True, True], inplace=True))
+    df_players.drop(columns=settings.Columns.POSITION_ID, inplace=True)
 
     # Features form
     df_players = add_gw_live_data(
-        df_players=df_players, gw_data=live_data["gw_history"], n_form=fpl_settings.n_form
+        df_players=df_players, gw_data=live_data[settings.Columns.GW_HISTORY], n_form=fpl_settings.n_form
         )
-    df_players.drop(columns='player_id', inplace=True)
+    df_players.drop(columns=settings.Columns.PLAYER_ID, inplace=True)
 
     cleaner = data_cleaner.DataCleaner(df=df_players)
     cleaner.clean_data()
@@ -70,14 +74,15 @@ def keep_necessary_players_live_data(df_players: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A pd.DataFrame of necessary players live data."""
 
-    is_available = ((df_players['can_select']) & (~df_players['status'].isin(['u', 'i', 's'])))
+    is_available = ((df_players[settings.ColumnsRaw.CAN_BE_SELECTED]) &
+                    (~df_players[settings.ColumnsRaw.PLAYER_STATUS].isin(['u', 'i', 's'])))
 
-    is_active = (df_players['status'] == 'a')
+    is_active = (df_players[settings.ColumnsRaw.PLAYER_STATUS] == 'a')
 
     df = df_players.loc[is_available & is_active, settings.PLAYERS_COLUMNS_KEEP].copy()
 
-    if 'chance_of_playing_next_round' in df.columns:
-        df['chance_of_playing_next_round'] = 100
+    if settings.ColumnsRaw.AVAILABILITY in df.columns:
+        df[settings.ColumnsRaw.AVAILABILITY] = 100
 
     return df
 
@@ -94,24 +99,30 @@ def add_fixtures_live_data(
 
     df_fixtures = pd.DataFrame(data=fixtures_data)
 
-    is_upcoming = (~df_fixtures['finished'])
+    is_upcoming = (~df_fixtures[settings.ColumnsRaw.IS_FINISHED])
 
-    cols = [c for c in settings.FIXTURES_COLUMNS_KEEP if c != 'finished']
+    cols = [c for c in settings.FIXTURES_COLUMNS_KEEP if c != settings.ColumnsRaw.IS_FINISHED]
     df_fixtures = df_fixtures.loc[is_upcoming, cols].rename(columns=settings.FIXTURES_COLUMNS_RENAME)
 
-    df_home = df_fixtures.rename(columns={'team_h': 'team_id', 'team_a': 'opp_id'})
-    df_home['is_home'] = True
+    df_home = df_fixtures.rename(columns={
+        settings.ColumnsRaw.TEAM_H: settings.Columns.TEAM_ID,
+        settings.ColumnsRaw.TEAM_A: settings.Columns.OPP_ID
+        })
+    df_home[settings.Columns.IS_HOME] = True
 
-    df_away = df_fixtures.rename(columns={'team_a': 'team_id', 'team_h': 'opp_id'})
-    df_away['is_home'] = False
+    df_away = df_fixtures.rename(columns={
+        settings.ColumnsRaw.TEAM_A: settings.Columns.TEAM_ID,
+        settings.ColumnsRaw.TEAM_H: settings.Columns.OPP_ID
+        })
+    df_away[settings.Columns.IS_HOME] = False
 
     df_home_away = pd.concat([df_home, df_away], ignore_index=True)
 
-    df_home_away.sort_values(by='GW', ascending=True, inplace=True)
+    df_home_away.sort_values(by=settings.Columns.GW, ascending=True, inplace=True)
 
-    df_home_away = df_home_away.groupby('team_id').head(n_fixtures)
+    df_home_away = df_home_away.groupby(settings.Columns.TEAM_ID).head(n_fixtures)
 
-    df = (df_players.merge(df_home_away, on='team_id', how="outer")) # GW, opp_id, is_home
+    df = (df_players.merge(df_home_away, on=settings.Columns.TEAM_ID, how="outer")) # GW, opp_id, is_home
 
     return df
 
@@ -130,8 +141,9 @@ def add_teams_live_data(df_players: pd.DataFrame, teams_data: list[dict[str, Any
 
     df = (
         df_players
-        .merge(df_teams, on='team_id', how="outer")
-        .merge(df_teams, left_on="opp_id", right_on='team_id', how="outer", suffixes=("", "_opp"))
+        .merge(df_teams, on=settings.Columns.TEAM_ID, how="outer")
+        .merge(df_teams, left_on=settings.Columns.OPP_ID, right_on=settings.Columns.TEAM_ID,
+               how="outer", suffixes=("", "_opp"))
     )  # team_name, team_id_opp, team_name_opp
 
     return df
@@ -152,8 +164,8 @@ def add_gw_live_data(
     df_players_gw = (
         df_players_gw[settings.PLAYERS_GW_COLUMNS_RENAME.keys()]
         .rename(columns=settings.PLAYERS_GW_COLUMNS_RENAME)
-        .sort_values(by=['GW', 'player_id'], ascending=True)
-        .groupby('player_id')
+        .sort_values(by=[settings.Columns.GW, settings.Columns.PLAYER_ID], ascending=True)
+        .groupby(settings.Columns.PLAYER_ID)
         .tail(n_form)
     )
 
@@ -162,23 +174,18 @@ def add_gw_live_data(
     df_players_gw = cleaner.df
 
     features = [c.removesuffix('_form') for c in settings.FEATURES_FORM]
-    if 'DC' not in features:
-        features.append('DC')
-
-    # # Keep original columns
-    # df = df_players_gw
-    # for c in features:
-    #     df[c+'_form'] = (df_players_gw.groupby('player_id')[c].transform('mean'))
+    if settings.Columns.DEFENSIVE_CONTRIBUTIONS not in features:
+        features.append(settings.Columns.DEFENSIVE_CONTRIBUTIONS)
 
     # Drop original columns
     df_form = (
-        df_players_gw.groupby('player_id')[features]
+        df_players_gw.groupby(settings.Columns.PLAYER_ID)[features]
         .mean()
         .add_suffix('_form')
         .reset_index()
     )
 
-    df = df_players.merge(df_form, on='player_id', how="left")
+    df = df_players.merge(df_form, on=settings.Columns.PLAYER_ID, how="left")
 
     return df
 
@@ -196,37 +203,40 @@ def prepare_players_past_data(
 
     players_past_data: dict[str, pd.DataFrame] = {}
 
-    for s in past_data['players'].keys():
+    for s in past_data[settings.Columns.PLAYERS].keys():
 
-        df_players = past_data['players'][s]
+        df_players = past_data[settings.Columns.PLAYERS][s]
 
         df_players = df_players[settings.SEASONS_COLUMNS_KEEP].copy()
         df_players.rename(columns=settings.SEASONS_COLUMNS_RENAME, inplace=True)
 
-        rows = (df_players['position_name'] == 'GK')
-        column = 'position_name'
-        df_players.loc[rows, column] = 'GKP'
+        rows = (df_players[settings.Columns.POSITION_NAME] == 'GK')
+        df_players.loc[rows, settings.Columns.POSITION_NAME] = 'GKP'
 
-        df_teams = past_data['teams'][s]
+        df_teams = past_data[settings.Columns.TEAMS][s]
         df_teams = df_teams[settings.SEASONS_TEAMS_COLUMNS_KEEP].copy()
         df_teams.rename(columns=settings.SEASONS_TEAMS_COLUMNS_RENAME, inplace=True)
 
         # Merge by team name (no team_id in df_players)
         l_before = len(df_players)
-        df_players = df_players.merge(df_teams, on='team', how="inner") # team_id, team_name
+        df_players = df_players.merge(df_teams, on=settings.Columns.TEAM_NAME_FULL, how="inner") # team_id, team_name
         l_after = len(df_players)
         if l_before != l_after:
             logger.warning(f'Rows lost during past seasons team merge! {l_before-l_after}')
 
-        df_players.drop(columns=['team'], inplace=True)
-        df_players = df_players.sort_values(by=['GW', 'team_name', 'position_name'], ascending=[True, True, True])
+        df_players.drop(columns=[settings.Columns.TEAM_NAME_FULL], inplace=True)
+        df_players = df_players.sort_values(
+            by=[settings.Columns.GW, settings.Columns.TEAM_NAME, settings.Columns.POSITION_NAME],
+            ascending=[True, True, True])
 
         # Add opponent
-        df_teams.drop(columns=['team'], inplace=True)
-        df_opponent = df_teams.drop_duplicates(subset=['team_id'])
-        df_players = df_players.merge(df_opponent, left_on='opp_id',
-            right_on='team_id', how='left', suffixes=('', '_opp')) # team_id_opp, team_name_opp
-        df_players.drop(columns=['team_id', 'opp_id', 'team_id_opp'], inplace=True)
+        df_teams.drop(columns=[settings.Columns.TEAM_NAME_FULL], inplace=True)
+        df_opponent = df_teams.drop_duplicates(subset=[settings.Columns.TEAM_ID])
+        df_players = df_players.merge(df_opponent, left_on=settings.Columns.OPP_ID,
+            right_on=settings.Columns.TEAM_ID, how='left', suffixes=('', '_opp')) # team_id_opp, team_name_opp
+        df_players.drop(columns=[
+            settings.Columns.TEAM_ID, settings.Columns.OPP_ID, settings.Columns.TEAM_ID+'_opp'
+            ], inplace=True)
 
         cleaner = data_cleaner.DataCleaner(df=df_players)
         cleaner.clean_data()

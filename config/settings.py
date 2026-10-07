@@ -4,32 +4,72 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from config import naming
+
+
+class ColumnsRaw(StrEnum):
+
+    PLAYERS = 'elements'
+    PLAYER_ID = 'id'
+    POSITION_ID = 'element_type'
+    AVAILABILITY = 'chance_of_playing_next_round'
+    CAN_BE_SELECTED = 'can_select'
+    PLAYER_STATUS = 'status'
+    PLAYER_HISTORY = 'history'
+    TEAMS = 'teams'
+    IS_FINISHED = 'finished'
+    TEAM_H = 'team_h'
+    TEAM_A = 'team_a'
+
 
 class Columns(StrEnum):
 
-    PLAYERS = 'elements'
-    PLAYER_ID = 'player_id'
-    POSITION_NAME = 'position_name'
-    POSITION_ID = 'element_type'
-    AVAILABILITY = 'chance_of_playing_next_round'
+    PLAYERS = naming.PLAYERS
+    TEAMS = naming.TEAMS
 
-    TEAMS = 'teams'
-    TEAM_ID = 'team_id'
-    TEAM_NAME = 'team_name'
+    PLAYER_ID = naming.PLAYER + naming.SEPARATOR + naming.ID
+    PLAYER_NAME = naming.PLAYER + naming.SEPARATOR + naming.NAME
 
-    FIXTURES = 'fixtures'
-    IS_FINISHED = 'finished'
+    POSITION_ID = naming.POSITION + naming.SEPARATOR + naming.ID
+    POSITION_NAME = naming.POSITION + naming.SEPARATOR + naming.NAME
+
+    TEAM_ID = naming.TEAM + naming.SEPARATOR + naming.ID
+    TEAM_NAME = naming.TEAM + naming.SEPARATOR + naming.NAME
+    TEAM_NAME_FULL = 'team_name_full'
+
+    FIXTURES = naming.FIXTURES
+
     IS_HOME = 'is_home'
-    TEAM_H = 'team_h'
-    TEAM_A = 'team_a'
     OPP_ID = 'opp_id'
-    GW = 'GW'
-    GW_HISTORY = 'gw_history'
+    GW = naming.GAMEWEEK
+    GW_HISTORY = naming.GAMEWEEK + naming.SEPARATOR + naming.HISTORY
+
+    EXPECTED_GOALS = naming.EXPECTED + naming.GOAL
+    EXPECTED_GOALS_CONCEDED = naming.EXPECTED + naming.GOAL_CONCEDED
+    EXPECTED_ASSISTS = naming.EXPECTED + naming.ASSIST
+    MINUTES = naming.MINUTES
+    POINTS = naming.POINTS
+    YELLOW_CARD = naming.YELLOW_CARD
+    RED_CARD = naming.RED_CARD
+    BONUS_POINTS = naming.BONUS_POINTS
+    CLEAN_SHEET = naming.CLEAN_SHEET
+    SAVES = naming.SAVES
+    DEFENSIVE_CONTRIBUTIONS = naming.DEFENSIVE_CONTRIBUTIONS
+    PENALTIES_SAVED = naming.PENALTY + naming.SEPARATOR + naming.SAVES
+    PENALTIES_MISSED = naming.PENALTY + naming.SEPARATOR + naming.MISSES
+    OWN_GOALS = naming.OWN + naming.SEPARATOR + naming.GOAL
+    FDR = naming.FIXTURE_DIFFICULTY
+    OFFENSE = naming.OFFENSE
+    DEFENSE = naming.DEFENSE
+    OPPONENT = naming.OPPONENT
+    FEATURES_SUFFIX = '_form'
 
 
 MINUTES_PER_GAME = 90
 
-POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
+POSITION_MAP = {
+    1: naming.GOALKEEPER, 2: naming.DEFENDER, 3: naming.MIDFIELDER, 4: naming.FORWARD
+    }
 
 LIVE_URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
 
@@ -40,11 +80,14 @@ LIVE_FIXTURES_STORE_RAW = "fpl_data/raw/fixtures_data_raw.csv"
 LIVE_GW_STORE_RAW = "fpl_data/raw/players_gw_data_raw.csv"
 
 LIVE_PLAYERS_STORE_CLEAN = "fpl_data/clean/players_data_clean.csv"
+LIVE_PLAYERS_STORE_FEATURES = "fpl_data/clean/players_data_features.csv"
 
 PAST_STORE_RAW = "fpl_data/past/raw/season_{season}_raw.csv"
 PAST_TEAMS_STORE_RAW = "fpl_data/past/raw/season_{season}_teams_raw.csv"
 
 PAST_STORE_CLEAN = "fpl_data/past/clean/season_{season}_clean.csv"
+PAST_STORE_FEATURES = "fpl_data/past/clean/season_{season}_features.csv"
+PAST_STORE_FEATURES_MERGED = "fpl_data/past/clean/past_seasons_features_merged.csv"
 
 PLAYERS_COLUMNS_KEEP = [
     'web_name', 'code', # player identifier
@@ -57,7 +100,10 @@ PLAYERS_COLUMNS_KEEP = [
     # 'ep_next'
     ]
 PLAYERS_COLUMNS_RENAME = {
-    'web_name': 'player_name', 'id': 'player_id', 'team': 'team_id', 'event_points': 'PTS_previous',
+    'web_name': Columns.PLAYER_NAME,
+    'id': Columns.PLAYER_ID, 'team': Columns.TEAM_ID,
+    'event_points': Columns.POINTS, #'PTS_previous',
+    'element_type': Columns.POSITION_ID,
     # 'chance_of_playing_next_round': 'availability',
     # 'ep_next': 'xP_FPL'
     }
@@ -69,7 +115,7 @@ FIXTURES_COLUMNS_KEEP = [
     'team_a', # merge to players
     'team_h' # merge to players
     ]
-FIXTURES_COLUMNS_RENAME = {'event': 'GW'}
+FIXTURES_COLUMNS_RENAME = {'event': Columns.GW}
 
 TEAMS_COLUMNS_KEEP = [
     'id', # merge to players
@@ -78,19 +124,22 @@ TEAMS_COLUMNS_KEEP = [
     # 'strength_defence_home', 'strength_defence_away'
     ]
 TEAMS_COLUMNS_RENAME = {
-    "id": "team_id", "short_name": "team_name",
+    "id": Columns.TEAM_ID, "short_name": Columns.TEAM_NAME,
     # 'strength_attack_home': 'off_home', 'strength_attack_away': 'off_away',
     # 'strength_defence_home': 'def_home', 'strength_defence_away': 'def_away'
     }
 
 GW_URL = "https://fantasy.premierleague.com/api/element-summary/"
 PLAYERS_GW_COLUMNS_RENAME = {
-    'element': 'player_id', 'total_points': 'PTS', 'round': 'GW', 'minutes': 'MIN',
-    'expected_goals': 'xG', 'expected_assists': 'xA',
-    'expected_goals_conceded': 'xGC', 'clean_sheets': 'CS',
-    'defensive_contribution': 'DC', 'saves': 'SA', 'yellow_cards': 'YC',
-    'red_cards': 'RC', 'penalties_missed': 'PM', 'penalties_saved': 'PS',
-    'own_goals': 'OG', 'bonus': 'BP'
+    'element': Columns.PLAYER_ID, 'total_points': Columns.POINTS,
+    'round': Columns.GW, 'minutes': Columns.MINUTES,
+    'expected_goals': Columns.EXPECTED_GOALS, 'expected_assists': Columns.EXPECTED_ASSISTS,
+    'expected_goals_conceded': Columns.EXPECTED_GOALS_CONCEDED,
+    'clean_sheets': Columns.CLEAN_SHEET, 'saves': Columns.SAVES,
+    'defensive_contribution': Columns.DEFENSIVE_CONTRIBUTIONS,
+    'yellow_cards': Columns.YELLOW_CARD, 'red_cards': Columns.RED_CARD,
+    'penalties_missed': Columns.PENALTIES_MISSED, 'penalties_saved': Columns.PENALTIES_SAVED,
+    'own_goals': Columns.OWN_GOALS, 'bonus': Columns.BONUS_POINTS
     }
 
 # expected values from 2022-23, DC from 2025-26
@@ -111,11 +160,18 @@ SEASONS_COLUMNS_KEEP = [
     # 'defensive_contribution'
     ]
 SEASONS_COLUMNS_RENAME = {
-    'name': 'player_name', 'position': 'position_name', 'element': 'player_id', 'minutes': 'MIN',
-    'expected_goals': 'xG', 'expected_assists': 'xA', 'expected_goals_conceded': 'xGC',
-    'clean_sheets': 'CS', 'saves': 'SA', 'yellow_cards': 'YC', 'red_cards': 'RC',
-    'penalties_missed': 'PM', 'penalties_saved': 'PS', 'own_goals': 'OG', 'bonus': 'BP',
-    'total_points': 'PTS', 'opponent_team': 'opp_id', 'was_home': 'is_home',
+    'name': Columns.PLAYER_NAME, 'position': Columns.POSITION_NAME,
+    'element': Columns.PLAYER_ID, 'minutes': Columns.MINUTES,
+    'expected_goals': Columns.EXPECTED_GOALS,
+    'expected_assists': Columns.EXPECTED_ASSISTS,
+    'expected_goals_conceded': Columns.EXPECTED_GOALS_CONCEDED,
+    'clean_sheets': Columns.CLEAN_SHEET, 'saves': Columns.SAVES,
+    'yellow_cards': Columns.YELLOW_CARD, 'red_cards': Columns.RED_CARD,
+    'penalties_missed': Columns.PENALTIES_MISSED, 'penalties_saved': Columns.PENALTIES_SAVED,
+    'own_goals': Columns.OWN_GOALS, 'bonus': Columns.BONUS_POINTS,
+    'total_points': Columns.POINTS,
+    'opponent_team': 'opp_id', 'was_home': 'is_home',
+    'team': 'team_name_full'
     # 'defensive_contribution': 'DC'
     }
 
@@ -126,7 +182,7 @@ SEASONS_TEAMS_COLUMNS_KEEP = [
     # 'strength_defence_home', 'strength_defence_away'
     ]
 SEASONS_TEAMS_COLUMNS_RENAME = {
-    'id': 'team_id', 'name': 'team', 'short_name': 'team_name',
+    'id': Columns.TEAM_ID, 'name': 'team_name_full', 'short_name': Columns.TEAM_NAME,
     # 'strength_attack_home': 'off_home', 'strength_attack_away': 'off_away',
     # 'strength_defence_home': 'def_home', 'strength_defence_away': 'def_away'
     }
@@ -203,6 +259,8 @@ class FPLSettings(BaseModel):
     prediction_model: Literal['formula', 'xgboost'] = Field(default='xgboost')
 
     ml_target: Literal['PTS'] = Field(default='PTS')
+
+    features_scale: Literal['form', 'form_per_90'] = Field(default='form')
 
 
 class DataURLs:
