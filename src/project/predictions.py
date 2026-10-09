@@ -3,7 +3,7 @@ from typing import Any
 
 import pandas as pd
 
-from config.settings import FPLSettings, ML_FEATURES_POS
+from config.settings import FPLSettings, ML_FEATURES_POS_FORM
 from config.settings import POINTS_COEFFICIENTS, POINTS_COEFFICIENTS_POS
 from src.data import data_store
 from src.models.ml_model import MLModel, XGBModel
@@ -59,7 +59,7 @@ def set_fpl_formula_predictions(df_features: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def set_expected_points(df_features: pd.DataFrame) -> pd.Series[float]:
+def set_expected_points(df_features: pd.DataFrame) -> pd.Series:
     """Set the expected players points based on expected values of the related quantities.
     Args:
         df_features: The pd.DataFrame of live features.
@@ -154,7 +154,7 @@ def set_fpl_ml_predictions(
     df['xP_predicted'] = pd.Series(dtype=float)
 
     test_split = ('season', '2025-26')
-    for pos, ft in ML_FEATURES_POS.items():
+    for pos, ft in ML_FEATURES_POS_FORM.items():
 
         df_pos = df_features_past[df_features_past['position_name'] == pos]
 
@@ -235,9 +235,7 @@ def evaluate_position_model(test_model: XGBModel, base_model: XGBModel) -> dict[
 
     return metrics
 
-def predict_position_points(
-    df_features: pd.DataFrame, xgb_model: XGBModel, rows: pd.Series[bool],
-    ) -> pd.Series[float]:
+def predict_position_points(df_features: pd.DataFrame, xgb_model: XGBModel, rows: pd.Series) -> pd.Series:
     """Predict player points using the XGBModel for a player position.
     Args:
         df_features: The pd.DataFrame of live features. Used for consistent indexing.

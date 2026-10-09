@@ -14,7 +14,7 @@ def main() -> None:
     # logging prints nothing below "level" of severity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     log_format = "%(asctime)s [%(levelname)s] %(name)s/%(filename)s (Line %(lineno)d): %(message)s"
     logging.basicConfig(
-        level=logging.DEBUG, format=log_format, datefmt="%d-%m-%Y %H:%M:%S",
+        level=logging.INFO, format=log_format, datefmt="%d-%m-%Y %H:%M:%S",
         handlers=[logging.FileHandler(filename="info.log", mode="w")]
         # handlers=[logging.StreamHandler(), logging.FileHandler("info.log", mode="w")]
         )

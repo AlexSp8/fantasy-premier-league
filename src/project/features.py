@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 
-from config import settings
+from config import settings, naming
 from src.data import data_store, data_features
 
 
@@ -94,7 +94,7 @@ def add_features_live(df_players: pd.DataFrame, fpl_settings: settings.FPLSettin
 
     return df_features.copy()
 
-def set_opponent_strength(df_features: pd.DataFrame, metric: str) -> pd.Series[float]:
+def set_opponent_strength(df_features: pd.DataFrame, metric: str) -> pd.Series:
     """Set opponent strength based on opponent's specified metric.
     Args:
         df_features: The pd.DataFrame of live features.
@@ -134,7 +134,7 @@ def set_opponent_strength(df_features: pd.DataFrame, metric: str) -> pd.Series[f
 
     return pd.Series(strength_opp, index=df_features.index)
 
-def set_fixture_difficulty(strength_opp: pd.Series[float]) -> pd.Series[float]:
+def set_fixture_difficulty(strength_opp: pd.Series) -> pd.Series:
     """Set fixture difficulty based on the opponent's strength.
     Args:
         strength_opp: The pd.Series of opponent strength feature.
@@ -179,10 +179,10 @@ def add_features_past(
         cols_to_drop.append(settings.Columns.PLAYER_ID)
         df_players.drop(columns=cols_to_drop, inplace=True)
 
-        off_home_opp = settings.Columns.OFFENSE + '_' + settings.Columns.HOME + '_' + settings.Columns.OPPONENT
-        off_away_opp = settings.Columns.OFFENSE + '_' + settings.Columns.AWAY + '_' + settings.Columns.OPPONENT
-        def_home_opp = settings.Columns.DEFENSE + '_' + settings.Columns.HOME + '_' + settings.Columns.OPPONENT
-        def_away_opp = settings.Columns.DEFENSE + '_' + settings.Columns.AWAY + '_' + settings.Columns.OPPONENT
+        off_home_opp = settings.Columns.OFFENSE + '_' + naming.HOME + '_' + settings.Columns.OPPONENT
+        off_away_opp = settings.Columns.OFFENSE + '_' + naming.AWAY + '_' + settings.Columns.OPPONENT
+        def_home_opp = settings.Columns.DEFENSE + '_' + naming.HOME + '_' + settings.Columns.OPPONENT
+        def_away_opp = settings.Columns.DEFENSE + '_' + naming.AWAY + '_' + settings.Columns.OPPONENT
         cols_opp = [settings.Columns.IS_HOME, off_home_opp, off_away_opp, def_home_opp, def_away_opp]
         are_present = set(cols_opp).issubset(df_players.columns)
         if are_present:

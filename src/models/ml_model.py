@@ -126,7 +126,7 @@ class XGBModel(MLModel):
             )
         self.model.fit(self.X_train, self.y_train)
 
-    def get_features_importances(self) -> pd.Series[float]:
+    def get_features_importances(self) -> pd.Series:
         """Get the features' importances for the XGBoost model.
         Returns:
             A pd.Series of features' importances for the XGBoost model."""

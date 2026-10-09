@@ -39,6 +39,8 @@ class Columns(StrEnum):
 
     FIXTURES = naming.FIXTURES
 
+    SEASON = naming.SEASON
+
     IS_HOME = 'is_home'
     OPP_ID = 'opp_id'
     GW = naming.GAMEWEEK
@@ -169,7 +171,7 @@ SEASONS_COLUMNS_RENAME = {
     'yellow_cards': Columns.YELLOW_CARD, 'red_cards': Columns.RED_CARD,
     'penalties_missed': Columns.PENALTIES_MISSED, 'penalties_saved': Columns.PENALTIES_SAVED,
     'own_goals': Columns.OWN_GOALS, 'bonus': Columns.BONUS_POINTS,
-    'total_points': Columns.POINTS,
+    'total_points': Columns.POINTS, 'GW': Columns.GW,
     'opponent_team': 'opp_id', 'was_home': 'is_home',
     'team': 'team_name_full'
     # 'defensive_contribution': 'DC'
@@ -189,30 +191,42 @@ SEASONS_TEAMS_COLUMNS_RENAME = {
 
 EXCLUDED_FROM_NEGATIVE_CHECK = ['change', 'balance', 'xP', 'bps', 'points', 'form', 'value', 'PTS']
 
-FEATURES_FORM = [
-    'MIN_form', 'CS_form', 'BP_form', 'SA_form', 'YC_form', 'RC_form', 'PTS_form',
-    'PM_form', 'PS_form', 'OG_form', 'xG_form', 'xA_form', 'xGC_form',
-    # 'DC_form'
+FEATURES = [
+    Columns.MINUTES, Columns.CLEAN_SHEET, Columns.BONUS_POINTS, Columns.SAVES,
+    Columns.YELLOW_CARD, Columns.RED_CARD, Columns.POINTS, Columns.PENALTIES_MISSED,
+    Columns.PENALTIES_SAVED, Columns.OWN_GOALS, Columns.EXPECTED_GOALS, 
+    Columns.EXPECTED_ASSISTS, Columns.EXPECTED_GOALS_CONCEDED,
+    # Columns.DEFENSIVE_CONTRIBUTIONS
     ]
+FEATURES_FORM = [c + '_form' for c in FEATURES]
 
 ML_FEATURES_POS = {
-    'GKP': ['MIN_form', 'xGC_form', 'CS_form', 'BP_form', 'SA_form', 'fdr_def',
-            # 'YC_form', 'RC_form', 'PS_form', 'OG_form',
-            'PTS_form'
+    'GKP': [Columns.MINUTES, Columns.EXPECTED_GOALS_CONCEDED, Columns.CLEAN_SHEET,
+            Columns.BONUS_POINTS, Columns.SAVES, (Columns.FDR + naming.SEPARATOR + Columns.DEFENSE),
+            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_SAVED, Columns.OWN_GOALS,
+            Columns.POINTS
             ],
-    'DEF': ['MIN_form', 'xG_form', 'xA_form', 'xGC_form', 'CS_form', 'BP_form', 'fdr_def', 'fdr_off',
-            # 'YC_form', 'RC_form', 'PM_form', 'OG_form',
-            'PTS_form'
+    'DEF': [Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.EXPECTED_GOALS_CONCEDED,
+            Columns.CLEAN_SHEET, Columns.BONUS_POINTS, (Columns.FDR + naming.SEPARATOR + Columns.DEFENSE),
+            (Columns.FDR + naming.SEPARATOR + Columns.OFFENSE),
+            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
+            Columns.POINTS
             ],
-    'MID': ['MIN_form', 'xG_form', 'xA_form', 'CS_form', 'BP_form', 'fdr_def', 'fdr_off',
-            # 'YC_form', 'RC_form', 'PM_form', 'OG_form',
-            'PTS_form'
+    'MID': [Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.CLEAN_SHEET,
+            Columns.BONUS_POINTS, (Columns.FDR + naming.SEPARATOR + Columns.DEFENSE),
+            (Columns.FDR + naming.SEPARATOR + Columns.OFFENSE),
+            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
+            Columns.POINTS
             ],
-    'FWD': ['MIN_form', 'xG_form', 'xA_form', 'BP_form', 'fdr_off',
-            # 'YC_form', 'RC_form', 'PM_form', 'OG_form',
-            'PTS_form'
+    'FWD': [Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.BONUS_POINTS,
+            (Columns.FDR + naming.SEPARATOR + Columns.OFFENSE),
+            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
+            Columns.POINTS
             ]
 }
+ML_FEATURES_POS_FORM = {}
+for pos, ft in ML_FEATURES_POS.items():
+    ML_FEATURES_POS_FORM[pos] = [c + '_form' for c in ft if 'fdr' not in c]
 
 POINTS_COEFFICIENTS = {
     'xA': 3, 'xPS': 5, 'xPM': 2, 'xOG': 2, 'xYC': 1, 'xRC': 3,
