@@ -21,11 +21,7 @@ class ColumnsRaw(StrEnum):
     TEAM_H = 'team_h'
     TEAM_A = 'team_a'
 
-
 class Columns(StrEnum):
-
-    PLAYERS = naming.PLAYERS
-    TEAMS = naming.TEAMS
 
     PLAYER_ID = naming.PLAYER + naming.SEPARATOR + naming.ID
     PLAYER_NAME = naming.PLAYER + naming.SEPARATOR + naming.NAME
@@ -35,17 +31,17 @@ class Columns(StrEnum):
 
     TEAM_ID = naming.TEAM + naming.SEPARATOR + naming.ID
     TEAM_NAME = naming.TEAM + naming.SEPARATOR + naming.NAME
-    TEAM_NAME_FULL = 'team_name_full'
-
-    FIXTURES = naming.FIXTURES
+    TEAM_NAME_FULL = TEAM_NAME + naming.SEPARATOR + 'full'
 
     SEASON = naming.SEASON
 
-    IS_HOME = 'is_home'
-    OPP_ID = 'opp_id'
+    IS_HOME = 'is' + naming.SEPARATOR + naming.HOME
+    OPPONENT_ID = naming.OPPONENT + naming.SEPARATOR + naming.ID
     GW = naming.GAMEWEEK
     GW_HISTORY = naming.GAMEWEEK + naming.SEPARATOR + naming.HISTORY
 
+    EXPECTED_POINTS = naming.EXPECTED + naming.POINTS
+    EXPECTED_POINTS_PREDICTED = naming.EXPECTED + naming.POINTS + naming.PREDICTED_SUFFIX
     EXPECTED_GOALS = naming.EXPECTED + naming.GOAL
     EXPECTED_GOALS_CONCEDED = naming.EXPECTED + naming.GOAL_CONCEDED
     EXPECTED_ASSISTS = naming.EXPECTED + naming.ASSIST
@@ -60,11 +56,8 @@ class Columns(StrEnum):
     PENALTIES_SAVED = naming.PENALTY + naming.SEPARATOR + naming.SAVES
     PENALTIES_MISSED = naming.PENALTY + naming.SEPARATOR + naming.MISSES
     OWN_GOALS = naming.OWN + naming.SEPARATOR + naming.GOAL
-    FDR = naming.FIXTURE_DIFFICULTY
-    OFFENSE = naming.OFFENSE
-    DEFENSE = naming.DEFENSE
-    OPPONENT = naming.OPPONENT
-    FEATURES_SUFFIX = '_form'
+    FDR_OFF = naming.FIXTURE_DIFFICULTY + naming.SEPARATOR + naming.OFFENSE
+    FDR_DEF = naming.FIXTURE_DIFFICULTY + naming.SEPARATOR + naming.DEFENSE
 
 
 MINUTES_PER_GAME = 90
@@ -74,20 +67,21 @@ POSITION_MAP = {
     }
 
 LIVE_URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
+FIXTURES_URL = "https://fantasy.premierleague.com/api/fixtures/"
+GW_URL = "https://fantasy.premierleague.com/api/element-summary/"
 
 LIVE_STORE_RAW = "fpl_data/raw/fpl_data_raw.json"
 LIVE_PLAYERS_STORE_RAW = "fpl_data/raw/players_data_raw.csv"
 LIVE_TEAMS_STORE_RAW = "fpl_data/raw/teams_data_raw.csv"
 LIVE_FIXTURES_STORE_RAW = "fpl_data/raw/fixtures_data_raw.csv"
 LIVE_GW_STORE_RAW = "fpl_data/raw/players_gw_data_raw.csv"
-
-LIVE_PLAYERS_STORE_CLEAN = "fpl_data/clean/players_data_clean.csv"
-LIVE_PLAYERS_STORE_FEATURES = "fpl_data/clean/players_data_features.csv"
-
 PAST_STORE_RAW = "fpl_data/past/raw/season_{season}_raw.csv"
 PAST_TEAMS_STORE_RAW = "fpl_data/past/raw/season_{season}_teams_raw.csv"
 
+LIVE_PLAYERS_STORE_CLEAN = "fpl_data/clean/players_data_clean.csv"
 PAST_STORE_CLEAN = "fpl_data/past/clean/season_{season}_clean.csv"
+
+LIVE_PLAYERS_STORE_FEATURES = "fpl_data/clean/players_data_features.csv"
 PAST_STORE_FEATURES = "fpl_data/past/clean/season_{season}_features.csv"
 PAST_STORE_FEATURES_MERGED = "fpl_data/past/clean/past_seasons_features_merged.csv"
 
@@ -107,10 +101,9 @@ PLAYERS_COLUMNS_RENAME = {
     'event_points': Columns.POINTS, #'PTS_previous',
     'element_type': Columns.POSITION_ID,
     # 'chance_of_playing_next_round': 'availability',
-    # 'ep_next': 'xP_FPL'
+    # 'ep_next': naming.EXPECTED + naming.POINTS + '_fpl'
     }
 
-FIXTURES_URL = "https://fantasy.premierleague.com/api/fixtures/"
 FIXTURES_COLUMNS_KEEP = [
     'finished', # keep only upcoming
     'event', # GW identifier
@@ -131,7 +124,6 @@ TEAMS_COLUMNS_RENAME = {
     # 'strength_defence_home': 'def_home', 'strength_defence_away': 'def_away'
     }
 
-GW_URL = "https://fantasy.premierleague.com/api/element-summary/"
 PLAYERS_GW_COLUMNS_RENAME = {
     'element': Columns.PLAYER_ID, 'total_points': Columns.POINTS,
     'round': Columns.GW, 'minutes': Columns.MINUTES,
@@ -172,9 +164,9 @@ SEASONS_COLUMNS_RENAME = {
     'penalties_missed': Columns.PENALTIES_MISSED, 'penalties_saved': Columns.PENALTIES_SAVED,
     'own_goals': Columns.OWN_GOALS, 'bonus': Columns.BONUS_POINTS,
     'total_points': Columns.POINTS, 'GW': Columns.GW,
-    'opponent_team': 'opp_id', 'was_home': 'is_home',
-    'team': 'team_name_full'
-    # 'defensive_contribution': 'DC'
+    'opponent_team': Columns.OPPONENT_ID, 'was_home': 'is_home',
+    'team': Columns.TEAM_NAME_FULL,
+    # 'defensive_contribution': Columns.DEFENSIVE_CONTRIBUTIONS
     }
 
 SEASONS_TEAMS_COLUMNS_KEEP = [
@@ -184,7 +176,7 @@ SEASONS_TEAMS_COLUMNS_KEEP = [
     # 'strength_defence_home', 'strength_defence_away'
     ]
 SEASONS_TEAMS_COLUMNS_RENAME = {
-    'id': Columns.TEAM_ID, 'name': 'team_name_full', 'short_name': Columns.TEAM_NAME,
+    'id': Columns.TEAM_ID, 'name': Columns.TEAM_NAME_FULL, 'short_name': Columns.TEAM_NAME,
     # 'strength_attack_home': 'off_home', 'strength_attack_away': 'off_away',
     # 'strength_defence_home': 'def_home', 'strength_defence_away': 'def_away'
     }
@@ -194,39 +186,41 @@ EXCLUDED_FROM_NEGATIVE_CHECK = ['change', 'balance', 'xP', 'bps', 'points', 'for
 FEATURES = [
     Columns.MINUTES, Columns.CLEAN_SHEET, Columns.BONUS_POINTS, Columns.SAVES,
     Columns.YELLOW_CARD, Columns.RED_CARD, Columns.POINTS, Columns.PENALTIES_MISSED,
-    Columns.PENALTIES_SAVED, Columns.OWN_GOALS, Columns.EXPECTED_GOALS, 
+    Columns.PENALTIES_SAVED, Columns.OWN_GOALS, Columns.EXPECTED_GOALS,
     Columns.EXPECTED_ASSISTS, Columns.EXPECTED_GOALS_CONCEDED,
     # Columns.DEFENSIVE_CONTRIBUTIONS
     ]
-FEATURES_FORM = [c + '_form' for c in FEATURES]
+FEATURES_FORM = [c + naming.FEATURES_SUFFIX for c in FEATURES]
 
 ML_FEATURES_POS = {
-    'GKP': [Columns.MINUTES, Columns.EXPECTED_GOALS_CONCEDED, Columns.CLEAN_SHEET,
-            Columns.BONUS_POINTS, Columns.SAVES, (Columns.FDR + naming.SEPARATOR + Columns.DEFENSE),
-            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_SAVED, Columns.OWN_GOALS,
-            Columns.POINTS
-            ],
-    'DEF': [Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.EXPECTED_GOALS_CONCEDED,
-            Columns.CLEAN_SHEET, Columns.BONUS_POINTS, (Columns.FDR + naming.SEPARATOR + Columns.DEFENSE),
-            (Columns.FDR + naming.SEPARATOR + Columns.OFFENSE),
-            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
-            Columns.POINTS
-            ],
-    'MID': [Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.CLEAN_SHEET,
-            Columns.BONUS_POINTS, (Columns.FDR + naming.SEPARATOR + Columns.DEFENSE),
-            (Columns.FDR + naming.SEPARATOR + Columns.OFFENSE),
-            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
-            Columns.POINTS
-            ],
-    'FWD': [Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.BONUS_POINTS,
-            (Columns.FDR + naming.SEPARATOR + Columns.OFFENSE),
-            # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
-            Columns.POINTS
-            ]
+    naming.GOALKEEPER: [
+        Columns.MINUTES, Columns.EXPECTED_GOALS_CONCEDED, Columns.CLEAN_SHEET,
+        Columns.BONUS_POINTS, Columns.SAVES, Columns.FDR_DEF,
+        # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_SAVED, Columns.OWN_GOALS,
+        Columns.POINTS
+        ],
+    naming.DEFENDER: [
+        Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.EXPECTED_GOALS_CONCEDED,
+        Columns.CLEAN_SHEET, Columns.BONUS_POINTS, Columns.FDR_DEF, Columns.FDR_OFF,
+        # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
+        Columns.POINTS
+        ],
+    naming.MIDFIELDER: [
+        Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.CLEAN_SHEET,
+        Columns.BONUS_POINTS, Columns.FDR_DEF, Columns.FDR_OFF,
+        # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
+        Columns.POINTS
+        ],
+    naming.FORWARD: [
+        Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.BONUS_POINTS,
+        Columns.FDR_OFF,
+        # Columns.YELLOW_CARD, Columns.RED_CARD, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
+        Columns.POINTS
+        ]
 }
 ML_FEATURES_POS_FORM = {}
 for pos, ft in ML_FEATURES_POS.items():
-    ML_FEATURES_POS_FORM[pos] = [c + '_form' for c in ft if 'fdr' not in c]
+    ML_FEATURES_POS_FORM[pos] = [c + naming.FEATURES_SUFFIX for c in ft if naming.FIXTURE_DIFFICULTY not in c]
 
 POINTS_COEFFICIENTS = {
     'xA': 3, 'xPS': 5, 'xPM': 2, 'xOG': 2, 'xYC': 1, 'xRC': 3,
@@ -234,18 +228,10 @@ POINTS_COEFFICIENTS = {
 }
 
 POINTS_COEFFICIENTS_POS = {
-    'GKP': {
-        'xG': 10, 'xCS': 4, 'xSA': 1.0/3.0
-    },
-    'DEF': {
-        'xG': 6, 'xCS': 4, 'xDC_bar': 10
-    },
-    'MID': {
-        'xG': 5, 'xCS': 1, 'xDC_bar': 12
-    },
-    'FWD': {
-        'xG': 4
-    },
+    naming.GOALKEEPER: {'xG': 10, 'xCS': 4, 'xSA': 1.0/3.0},
+    naming.DEFENDER: {'xG': 6, 'xCS': 4, 'xDC_bar': 10},
+    naming.MIDFIELDER: {'xG': 5, 'xCS': 1, 'xDC_bar': 12},
+    naming.FORWARD: {'xG': 4},
 }
 
 POSITION_CONSTRAINTS = {
@@ -268,7 +254,7 @@ class FPLSettings(BaseModel):
 
     n_fixtures: int = Field(default=3, ge=1)
 
-    metric: Literal['xP_predicted_sum'] = Field(default="xP_predicted_sum")
+    metric: Literal['xP_predicted_sum'] = Field(default='xP_predicted_sum')
 
     prediction_model: Literal['formula', 'xgboost'] = Field(default='xgboost')
 
@@ -302,7 +288,7 @@ class FilePathsRaw:
 
 
 class FilePathsClean:
-    """Class-container of file paths for fetching or storing of clean data."""
+    """Class-container of file paths for fetching or storing clean data."""
 
     LIVE_PLAYERS_STORE_CLEAN = "fpl_data/clean/players_data_clean.csv"
     PAST_STORE_CLEAN = "fpl_data/past/clean/season_{season}_clean.csv"
