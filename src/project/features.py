@@ -2,42 +2,15 @@
 import pandas as pd
 import numpy as np
 
-from config import settings, naming
-from config.settings import Columns
+from config import settings
+from config.naming import Names
+from config.settings import FPLSettings, Columns
 from src.data import data_store, data_features
 
 
-def add_features(
-    df_players: pd.DataFrame, players_past_data: dict[str, pd.DataFrame],
-    fpl_settings: settings.FPLSettings, store: bool = True
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Add live and past features.
-    Args:
-        df_players: The pd.DataFrame of players live data.
-        players_past_data: The dictionary of pd.DataFrames of players past data.
-        fpl_settings: The FPLSettings instance specifying constraints and settings.
-        store (optional): Boolean indicating whether to store data or not.
-    Returns:
-        A tuple of pd.DataFrames of live and past features."""
-
-    df_features = add_features_live(df_players, fpl_settings)
-
-    features_past = add_features_past(players_past_data, fpl_settings)
-    df_features_past = merge_past_seasons(features_past)
-    df_features_past = prepare_features_past(df_features_past)
-
-    if store:
-        data_store.save_df_to_csv(df_features, settings.LIVE_PLAYERS_STORE_FEATURES, overwrite=True)
-
-        for s in features_past.keys():
-            file_path = settings.PAST_STORE_FEATURES.format(season=s)
-            data_store.save_df_to_csv(features_past[s], file_path, overwrite=True)
-
-        data_store.save_df_to_csv(df_features_past, settings.PAST_STORE_FEATURES_MERGED, overwrite=True)
-
-    return df_features, df_features_past
-
-def add_features_live(df_players: pd.DataFrame, fpl_settings: settings.FPLSettings) -> pd.DataFrame:
+def add_features_live(
+        df_players: pd.DataFrame, fpl_settings: FPLSettings, store: bool = True
+        ) -> pd.DataFrame:
     """Add live features.
     Args:
         df_players: The pd.DataFrame of players live data.
@@ -48,11 +21,11 @@ def add_features_live(df_players: pd.DataFrame, fpl_settings: settings.FPLSettin
     fpl_features = data_features.DataFeatures(df=df_players)
 
     # Calculate per 90
-    if fpl_settings.features_scale == 'form_per_90':
+    if fpl_settings.features_scale == Names.FORM_PER_90:
 
-        min_form = Columns.MINUTES + naming.FEATURES_SUFFIX
+        min_form = Columns.MINUTES + Names.FORM_SUFFIX
         features_form = [c for c in settings.FEATURES_FORM if c != min_form]
-        dc_form = Columns.DEFENSIVE_CONTRIBUTIONS + naming.FEATURES_SUFFIX
+        dc_form = Columns.DEFENSIVE_CONTRIBUTIONS + Names.FORM_SUFFIX
         if dc_form not in features_form:
             features_form.append(dc_form)
         fpl_features.calculate_per_x(features_form, min_form, settings.MINUTES_PER_GAME)
@@ -62,10 +35,10 @@ def add_features_live(df_players: pd.DataFrame, fpl_settings: settings.FPLSettin
         bp_bounds = data_features.Bounds(lower=0.0, upper=3.0)
         cs_bounds = data_features.Bounds(lower=0.0, upper=1.0)
 
-        yc = Columns.YELLOW_CARD + '_' + fpl_settings.features_scale
-        rc = Columns.RED_CARD + '_' + fpl_settings.features_scale
-        bp = Columns.BONUS_POINTS + '_' + fpl_settings.features_scale
-        cs = Columns.CLEAN_SHEET + '_' + fpl_settings.features_scale
+        yc = Columns.YELLOW_CARDS + Names.FORM_PER_90_SUFFIX
+        rc = Columns.RED_CARDS + Names.FORM_PER_90_SUFFIX
+        bp = Columns.BONUS_POINTS + Names.FORM_PER_90_SUFFIX
+        cs = Columns.CLEAN_SHEET + Names.FORM_PER_90_SUFFIX
 
         bounds_dict = {yc: yc_bounds, rc: rc_bounds, bp: bp_bounds, cs: cs_bounds}
 
@@ -73,15 +46,15 @@ def add_features_live(df_players: pd.DataFrame, fpl_settings: settings.FPLSettin
 
     df_features = fpl_features.df
 
-    off_opp = naming.OFFENSE + naming.OPPONENT_SUFFIX
-    def_opp = naming.DEFENSE + naming.OPPONENT_SUFFIX
+    off_opp = Names.OFFENSE + Names.OPPONENT_SUFFIX
+    def_opp = Names.DEFENSE + Names.OPPONENT_SUFFIX
 
     if (off_opp not in df_features.columns):
-        metric = Columns.EXPECTED_GOALS + naming.FEATURES_SUFFIX
+        metric = Columns.EXPECTED_GOALS_FORM
         df_features[off_opp] = set_opponent_strength(df_features, metric)
 
     if (def_opp not in df_features.columns):
-        metric = Columns.EXPECTED_GOALS_CONCEDED + naming.FEATURES_SUFFIX
+        metric = Columns.EXPECTED_GOALS_CONCEDED_FORM
         df_features[def_opp] = set_opponent_strength(df_features, metric)
 
     df_features[Columns.FDR_OFF] = set_fixture_difficulty(df_features[def_opp])
@@ -89,7 +62,10 @@ def add_features_live(df_players: pd.DataFrame, fpl_settings: settings.FPLSettin
 
     df_features.drop(columns=[Columns.IS_HOME, off_opp, def_opp], inplace=True)
 
-    return df_features.copy()
+    if store:
+        data_store.save_df_to_csv(df_features, settings.STORE_FILE_PATH['features'][Names.LIVE], overwrite=True)
+
+    return df_features
 
 def set_opponent_strength(df_features: pd.DataFrame, metric: str) -> pd.Series:
     """Set opponent strength based on opponent's specified metric.
@@ -99,14 +75,12 @@ def set_opponent_strength(df_features: pd.DataFrame, metric: str) -> pd.Series:
     Returns:
         A pd.Series[float] for the opponent's strength."""
 
-    min_form = Columns.MINUTES + naming.FEATURES_SUFFIX
-
     df_home = df_features[df_features[Columns.IS_HOME]]
-    sum_min_h = df_home.groupby(Columns.TEAM_NAME)[min_form].sum().replace(0, np.nan)
+    sum_min_h = df_home.groupby(Columns.TEAM_NAME)[Columns.MINUTES_FORM].sum().replace(0, np.nan)
     sum_strength_h = df_home.groupby(Columns.TEAM_NAME)[metric].sum()
 
     df_away = df_features[~df_features[Columns.IS_HOME]]
-    sum_min_a = df_away.groupby(Columns.TEAM_NAME)[min_form].sum().replace(0, np.nan)
+    sum_min_a = df_away.groupby(Columns.TEAM_NAME)[Columns.MINUTES_FORM].sum().replace(0, np.nan)
     sum_strength_a = df_away.groupby(Columns.TEAM_NAME)[metric].sum()
 
     strength_h = settings.MINUTES_PER_GAME*(sum_strength_h/sum_min_h)
@@ -123,7 +97,7 @@ def set_opponent_strength(df_features: pd.DataFrame, metric: str) -> pd.Series:
         strength_h = 1.0/strength_h.replace(0, np.nan)
         strength_a = 1.0/strength_a.replace(0, np.nan)
 
-    col = Columns.TEAM_NAME + naming.OPPONENT_SUFFIX
+    col = Columns.TEAM_NAME + Names.OPPONENT_SUFFIX
     strength_h_opp = df_features[col].map(strength_h)
     strength_a_opp = df_features[col].map(strength_a)
 
@@ -149,8 +123,8 @@ def set_fixture_difficulty(strength_opp: pd.Series) -> pd.Series:
     return fdr
 
 def add_features_past(
-    players_past_data: dict[str, pd.DataFrame], fpl_settings: settings.FPLSettings
-    ) -> dict[str, pd.DataFrame]:
+        players_past_data: dict[str, pd.DataFrame], fpl_settings: FPLSettings, store: bool = True
+        ) -> dict[str, pd.DataFrame]:
     """Add past features.
     Args:
         players_past_data: The dictionary of pd.DataFrame of players past data.
@@ -165,7 +139,7 @@ def add_features_past(
 
         df_players.sort_values([Columns.PLAYER_ID, Columns.GW], inplace=True)
 
-        features = [c.removesuffix(naming.FEATURES_SUFFIX) for c in settings.FEATURES_FORM]
+        features = [c for c in settings.FEATURES]
 
         df_players[settings.FEATURES_FORM] = (
             df_players.groupby(Columns.PLAYER_ID)[features]
@@ -176,30 +150,37 @@ def add_features_past(
         cols_to_drop.append(Columns.PLAYER_ID)
         df_players.drop(columns=cols_to_drop, inplace=True)
 
-        off_home_opp = naming.OFFENSE + '_' + naming.HOME + naming.OPPONENT_SUFFIX
-        off_away_opp = naming.OFFENSE + '_' + naming.AWAY + naming.OPPONENT_SUFFIX
-        def_home_opp = naming.DEFENSE + '_' + naming.HOME + naming.OPPONENT_SUFFIX
-        def_away_opp = naming.DEFENSE + '_' + naming.AWAY + naming.OPPONENT_SUFFIX
+        off_home_opp = Names.OFFENSE + Names.HOME_SUFFIX + Names.OPPONENT_SUFFIX
+        off_away_opp = Names.OFFENSE + Names.AWAY_SUFFIX + Names.OPPONENT_SUFFIX
+        def_home_opp = Names.DEFENSE + Names.HOME_SUFFIX + Names.OPPONENT_SUFFIX
+        def_away_opp = Names.DEFENSE + Names.AWAY_SUFFIX + Names.OPPONENT_SUFFIX
         cols_opp = [Columns.IS_HOME, off_home_opp, off_away_opp, def_home_opp, def_away_opp]
         are_present = set(cols_opp).issubset(df_players.columns)
         if are_present:
             fdr_off = Columns.FDR_OFF
             df_players[fdr_off] = np.where(
-                df_players[Columns.IS_HOME], df_players[def_away_opp],
-                df_players[def_home_opp]
+                df_players[Columns.IS_HOME], df_players[def_away_opp], df_players[def_home_opp]
                 )
             fdr_def = Columns.FDR_DEF
             df_players[fdr_def] = np.where(
-                df_players[Columns.IS_HOME], df_players[off_away_opp],
-                df_players[off_home_opp]
+                df_players[Columns.IS_HOME], df_players[off_away_opp], df_players[off_home_opp]
                 )
             df_players.drop(columns=cols_opp, inplace=True)
         else:
-            df_players = add_features_live(df_players, fpl_settings)
+            df_players = add_features_live(df_players, fpl_settings, store=False)
 
         past_features[s] = df_players.copy()
 
-    return past_features
+    df_features_past = merge_past_seasons(past_features)
+    df_features_past = prepare_features_past(df_features_past)
+
+    if store:
+        data_store.save_df_to_csv(df_features_past, settings.STORE_FILE_PATH['features']['past_merged'], overwrite=True)
+        for s in past_features.keys():
+            file_path = settings.STORE_FILE_PATH['features']['past'].format(season=s)
+            data_store.save_df_to_csv(past_features[s], file_path, overwrite=True)
+
+    return df_features_past
 
 def merge_past_seasons(features_past: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """Merge past features pd.DataFrames.
@@ -226,8 +207,7 @@ def prepare_features_past(df_features_past: pd.DataFrame) -> pd.DataFrame:
 
     columns_seasons = [
         Columns.SEASON, Columns.GW, Columns.PLAYER_NAME,
-        Columns.POSITION_NAME, Columns.TEAM_NAME,
-        Columns.FDR_OFF, Columns.FDR_DEF,
+        Columns.POSITION_NAME, Columns.TEAM_NAME, Columns.FDR_OFF, Columns.FDR_DEF,
         Columns.POINTS
         ]
     for f in settings.FEATURES_FORM:

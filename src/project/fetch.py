@@ -5,8 +5,8 @@ import logging
 
 import pandas as pd
 
-from config import settings, naming
-from config.settings import ColumnsRaw, Columns
+from config import settings
+from config.naming import NamesRaw, Names
 from src.data import data_fetch, data_store
 
 
@@ -20,19 +20,19 @@ def fetch_live_data(store: bool = True) -> dict[str, Any]:
         A dictionary of players, teams, fixtures, GW history live data."""
 
     # Players, Teams
-    live_data = cast(dict[str, Any], data_fetch.fetch_json_data(settings.LIVE_URL, settings.LIVE_STORE_RAW))
+    live_data = data_fetch.fetch_json_data(settings.URL[Names.LIVE], settings.STORE_FILE_PATH[Names.RAW][Names.LIVE])
 
     # rename columns
-    key_map = {ColumnsRaw.PLAYERS: naming.PLAYERS, ColumnsRaw.TEAMS: naming.TEAMS}
-    live_data = {key_map.get(k, k): v for k, v in live_data.items()}
+    key_map = {NamesRaw.PLAYERS: Names.PLAYERS, NamesRaw.TEAMS: Names.TEAMS}
+    live_data = cast(dict[str, Any], {key_map.get(k, k): v for k, v in live_data.items()})
 
-    key = naming.FIXTURES
+    key = Names.FIXTURES
     if key not in live_data.keys():
-        live_data[key] = data_fetch.fetch_json_data(settings.FIXTURES_URL)
+        live_data[key] = data_fetch.fetch_json_data(settings.URL[Names.FIXTURES])
 
-    key = Columns.GW_HISTORY
+    key = Names.GW_HISTORY
     if key not in live_data.keys():
-        player_ids = [row[ColumnsRaw.PLAYER_ID] for row in live_data[naming.PLAYERS]]
+        player_ids = [row[NamesRaw.PLAYER_ID] for row in live_data[Names.PLAYERS]]
         live_data[key] = fetch_live_gw_data(player_ids)
 
     if store:
@@ -52,10 +52,10 @@ def fetch_live_gw_data(player_ids: list[int]) -> list[list[dict[str, Any]]]:
 
     for pid in sorted(player_ids):
         try:
-            url = settings.GW_URL + str(pid)
+            url = settings.URL[Names.GW_HISTORY] + str(pid)
             player_history = cast(dict[str, Any], data_fetch.fetch_json_data(url))
-            player_gw_history = cast(list[dict[str, Any]], player_history[ColumnsRaw.PLAYER_HISTORY])
-            time.sleep(0.5)
+            player_gw_history = cast(list[dict[str, Any]], player_history[NamesRaw.PLAYER_HISTORY])
+            time.sleep(0.2)
             gw_history.append(player_gw_history)
         except Exception as e:
             logger.warning(f"Failed to fetch data for player {pid}. Exception: {e}")
@@ -67,17 +67,17 @@ def store_live_data_raw(live_data: dict[str, Any]) -> None:
     Args:
         live_data: The dictionary of players, teams, fixtures, GW history live data."""
 
-    data_store.store_data_to_json(live_data, settings.LIVE_STORE_RAW)
+    data_store.store_data_to_json(live_data, settings.STORE_FILE_PATH[Names.RAW][Names.LIVE])
 
-    data_store.save_list_dict_to_csv(live_data[naming.PLAYERS], settings.LIVE_PLAYERS_STORE_RAW)
+    data_store.save_list_dict_to_csv(live_data[Names.PLAYERS], settings.STORE_FILE_PATH[Names.RAW][Names.PLAYERS])
 
-    data_store.save_list_dict_to_csv(live_data[naming.TEAMS], settings.LIVE_TEAMS_STORE_RAW)
+    data_store.save_list_dict_to_csv(live_data[Names.TEAMS], settings.STORE_FILE_PATH[Names.RAW][Names.TEAMS])
 
-    data_store.save_list_dict_to_csv(live_data[naming.FIXTURES], settings.LIVE_FIXTURES_STORE_RAW)
+    data_store.save_list_dict_to_csv(live_data[Names.FIXTURES], settings.STORE_FILE_PATH[Names.RAW][Names.FIXTURES])
 
-    df_gw_list = [pd.DataFrame(data=player) for player in live_data[Columns.GW_HISTORY]]
+    df_gw_list = [pd.DataFrame(data=player) for player in live_data[Names.GW_HISTORY]]
     df_players_gw = pd.concat(df_gw_list, ignore_index=True)
-    data_store.save_df_to_csv(df_players_gw, settings.LIVE_GW_STORE_RAW)
+    data_store.save_df_to_csv(df_players_gw, settings.STORE_FILE_PATH[Names.RAW][Names.GW_HISTORY])
 
 def fetch_past_data(store: bool = True) -> dict[str, dict[str, pd.DataFrame]]:
     """Fetch past data (players, teams) from API or existing directory.
@@ -86,17 +86,21 @@ def fetch_past_data(store: bool = True) -> dict[str, dict[str, pd.DataFrame]]:
     Returns:
         A dictionary of pd.DataFrames of players, teams past data."""
 
-    file_paths = [settings.PAST_STORE_RAW.format(season=s) for s in settings.PAST_SEASONS]
-    file_paths_teams = [settings.PAST_TEAMS_STORE_RAW.format(season=s) for s in settings.PAST_SEASONS]
+    file_paths = [
+        settings.STORE_FILE_PATH[Names.RAW][Names.PAST_PLAYERS].format(season=s) for s in settings.PAST_SEASONS
+        ]
+    file_paths_teams = [
+        settings.STORE_FILE_PATH[Names.RAW][Names.PAST_TEAMS].format(season=s) for s in settings.PAST_SEASONS
+        ]
 
-    prefix = settings.PAST_URL
+    prefix = settings.URL[Names.PAST]
     suffix = settings.PAST_PLAYERS_SUFFIX
     past_players_data = data_fetch.fetch_multiple_csv_data(prefix, suffix, settings.PAST_SEASONS, file_paths)
 
     suffix = settings.PAST_TEAMS_SUFFIX
     past_teams_data = data_fetch.fetch_multiple_csv_data(prefix, suffix, settings.PAST_SEASONS, file_paths_teams)
 
-    past_data = {naming.PLAYERS: past_players_data, naming.TEAMS: past_teams_data}
+    past_data = {Names.PLAYERS: past_players_data, Names.TEAMS: past_teams_data}
 
     if store:
         store_past_data_raw(past_data)
@@ -108,9 +112,9 @@ def store_past_data_raw(past_data: dict[str, dict[str, pd.DataFrame]]) -> None:
     Args:
         past_data: The dictionary of players, teams past data."""
 
-    for s, df in past_data[naming.PLAYERS].items():
-        file_path = settings.PAST_STORE_RAW.format(season=s)
+    for s, df in past_data[Names.PLAYERS].items():
+        file_path = settings.STORE_FILE_PATH[Names.RAW][Names.PAST_PLAYERS].format(season=s)
         data_store.save_df_to_csv(df, file_path)
-    for s, df in past_data[naming.TEAMS].items():
-        file_path = settings.PAST_TEAMS_STORE_RAW.format(season=s)
+    for s, df in past_data[Names.TEAMS].items():
+        file_path = settings.STORE_FILE_PATH[Names.RAW][Names.PAST_TEAMS].format(season=s)
         data_store.save_df_to_csv(df, file_path)

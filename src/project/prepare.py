@@ -4,14 +4,15 @@ import logging
 
 import pandas as pd
 
-from config import settings, naming
+from config import settings
+from config.naming import Names
 from config.settings import FPLSettings, ColumnsRaw, Columns
 from src.data import data_store, data_cleaner
 
 
 logger = logging.getLogger(__name__)
 
-def prepare_players_live_data(
+def prepare_live_data(
     live_data: dict[str, Any], fpl_settings: FPLSettings, store: bool = True
     ) -> pd.DataFrame:
     """Prepare players live data for analysis.
@@ -24,7 +25,7 @@ def prepare_players_live_data(
     Raises:
         ValueError: If the pd.DataFrame contains not-allowed negative entries."""
 
-    df_players = pd.DataFrame(data=live_data[naming.PLAYERS])
+    df_players = pd.DataFrame(data=live_data[Names.PLAYERS])
 
     df_players = keep_players_live_data(df_players)
 
@@ -33,25 +34,21 @@ def prepare_players_live_data(
     df_players[Columns.POSITION_NAME] = (df_players[Columns.POSITION_ID].map(settings.POSITION_MAP))
 
     # GW, opp_id, is_home
-    df_players = add_fixtures_live_data(df_players, live_data[naming.FIXTURES], fpl_settings.n_fixtures)
+    df_players = add_fixtures_live_data(df_players, live_data[Names.FIXTURES], fpl_settings.n_fixtures)
 
     # team_name, team_id_opp, team_name_opp
-    df_players = add_teams_live_data(df_players, live_data[naming.TEAMS])
-    opponent_suffix = naming.OPPONENT_SUFFIX
+    df_players = add_teams_live_data(df_players, live_data[Names.TEAMS])
     df_players.drop(
-        columns=[Columns.TEAM_ID, Columns.OPPONENT_ID, Columns.TEAM_ID + opponent_suffix], inplace=True
+        columns=[Columns.TEAM_ID, Columns.OPPONENT_ID, Columns.TEAM_ID + Names.OPPONENT_SUFFIX], inplace=True
         )
-
-    (
-        df_players.sort_values(
-            by=[Columns.GW, Columns.TEAM_NAME, Columns.POSITION_ID], ascending=[True, True, True], inplace=True
-        )
-    )
-    df_players.drop(columns=Columns.POSITION_ID, inplace=True)
 
     # Features form
-    df_players = add_gw_live_data(df_players, live_data[Columns.GW_HISTORY], fpl_settings.n_form)
-    df_players.drop(columns=Columns.PLAYER_ID, inplace=True)
+    df_players = add_gw_live_data(df_players, live_data[Names.GW_HISTORY], fpl_settings.n_form)
+
+    df_players.sort_values(
+        by=[Columns.PLAYER_ID, Columns.GW], ascending=[True, True], inplace=True
+        )
+    df_players.drop(columns=[Columns.POSITION_ID, Columns.PLAYER_ID], inplace=True)
 
     cleaner = data_cleaner.DataCleaner(df_players)
     cleaner.clean_data()
@@ -60,23 +57,24 @@ def prepare_players_live_data(
     df_players = cleaner.df
 
     if store:
-        data_store.save_df_to_csv(df_players, settings.LIVE_PLAYERS_STORE_CLEAN, overwrite=True)
+        data_store.save_df_to_csv(df_players, settings.STORE_FILE_PATH[Names.CLEAN][Names.LIVE], overwrite=True)
 
     return df_players
 
 def keep_players_live_data(df_players: pd.DataFrame) -> pd.DataFrame:
-    """Keep only the required players live data.
+    """Keep only necessary players live data.
     Args:
         df_players: The pd.DataFrame of players live data.
     Returns:
         A pd.DataFrame of necessary players live data."""
 
+    # 'u': unavailable, 'i': injured, 's': suspended, 'd': doubtful, 'a': available
     is_available = ((df_players[ColumnsRaw.CAN_BE_SELECTED]) &
                     (~df_players[ColumnsRaw.PLAYER_STATUS].isin(['u', 'i', 's'])))
 
     is_active = (df_players[ColumnsRaw.PLAYER_STATUS] == 'a')
 
-    df = df_players.loc[is_available & is_active, settings.PLAYERS_COLUMNS_KEEP].copy()
+    df = df_players.loc[is_available & is_active, settings.PLAYERS_COLUMNS_RENAME.keys()].copy()
 
     if ColumnsRaw.AVAILABILITY in df.columns:
         df[ColumnsRaw.AVAILABILITY] = 100
@@ -84,8 +82,8 @@ def keep_players_live_data(df_players: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def add_fixtures_live_data(
-    df_players: pd.DataFrame, fixtures_data: list[dict[str, Any]], n_fixtures: int
-    ) -> pd.DataFrame:
+        df_players: pd.DataFrame, fixtures_data: list[dict[str, Any]], n_fixtures: int
+        ) -> pd.DataFrame:
     """Add the required fixtures live data to the players live data.
     Args:
         df_players: The pd.DataFrame of players live data.
@@ -94,20 +92,22 @@ def add_fixtures_live_data(
     Returns:
         A pd.DataFrame of players live data augmented with the fixtures live data."""
 
-    df_fixtures = pd.DataFrame(data=fixtures_data)
+    df_fixtures = (
+        pd.DataFrame(data=fixtures_data, columns=settings.FIXTURES_COLUMNS_RENAME.keys())
+        .rename(columns=settings.FIXTURES_COLUMNS_RENAME)
+        )
 
-    is_upcoming = (~df_fixtures[ColumnsRaw.IS_FINISHED])
-
-    cols = [c for c in settings.FIXTURES_COLUMNS_KEEP if c != ColumnsRaw.IS_FINISHED]
-    df_fixtures = df_fixtures.loc[is_upcoming, cols].rename(columns=settings.FIXTURES_COLUMNS_RENAME)
+    is_upcoming = (~df_fixtures[Columns.IS_FINISHED])
+    cols = [c for c in settings.FIXTURES_COLUMNS_RENAME.values() if c != Columns.IS_FINISHED]
+    df_fixtures = df_fixtures.loc[is_upcoming, cols]
 
     df_home = df_fixtures.rename(
-        columns={ColumnsRaw.TEAM_H: Columns.TEAM_ID, ColumnsRaw.TEAM_A: Columns.OPPONENT_ID}
+        columns={Columns.HOME_TEAM_ID: Columns.TEAM_ID, Columns.AWAY_TEAM_ID: Columns.OPPONENT_ID}
         )
     df_home[Columns.IS_HOME] = True
 
     df_away = df_fixtures.rename(
-        columns={ColumnsRaw.TEAM_A: Columns.TEAM_ID, ColumnsRaw.TEAM_H: Columns.OPPONENT_ID}
+        columns={Columns.AWAY_TEAM_ID: Columns.TEAM_ID, Columns.HOME_TEAM_ID: Columns.OPPONENT_ID}
         )
     df_away[Columns.IS_HOME] = False
 
@@ -130,17 +130,15 @@ def add_teams_live_data(df_players: pd.DataFrame, teams_data: list[dict[str, Any
         A pd.DataFrame of players live data augmented with the teams live data."""
 
     df_teams = (
-        pd.DataFrame(data=teams_data, columns=settings.TEAMS_COLUMNS_KEEP)
+        pd.DataFrame(data=teams_data, columns=settings.TEAMS_COLUMNS_RENAME.keys())
         .rename(columns=settings.TEAMS_COLUMNS_RENAME)
     )
-
-    opponent_suffix = naming.OPPONENT_SUFFIX
 
     df = (
         df_players
         .merge(df_teams, on=Columns.TEAM_ID, how="outer")
         .merge(df_teams, left_on=Columns.OPPONENT_ID, right_on=Columns.TEAM_ID,
-               how="outer", suffixes=("", opponent_suffix))
+               how="outer", suffixes=("", Names.OPPONENT_SUFFIX))
     )  # team_name, team_id_opp, team_name_opp
 
     return df
@@ -170,7 +168,7 @@ def add_gw_live_data(
     cleaner.clean_data()
     df_players_gw = cleaner.df
 
-    features = settings.FEATURES
+    features = settings.FEATURES.copy()
     if Columns.DEFENSIVE_CONTRIBUTIONS not in features:
         features.append(Columns.DEFENSIVE_CONTRIBUTIONS)
 
@@ -178,7 +176,7 @@ def add_gw_live_data(
     df_form = (
         df_players_gw.groupby(Columns.PLAYER_ID)[features]
         .mean()
-        .add_suffix(naming.FEATURES_SUFFIX)
+        .add_suffix(Names.FORM_SUFFIX)
         .reset_index()
     )
 
@@ -186,7 +184,7 @@ def add_gw_live_data(
 
     return df
 
-def prepare_players_past_data(
+def prepare_past_data(
     past_data: dict[str, dict[str, pd.DataFrame]], store: bool = True
     ) -> dict[str, pd.DataFrame]:
     """Prepare players past data for analysis.
@@ -200,20 +198,18 @@ def prepare_players_past_data(
 
     players_past_data: dict[str, pd.DataFrame] = {}
 
-    opponent_suffix = naming.OPPONENT_SUFFIX
+    for s in past_data[Names.PLAYERS].keys():
 
-    for s in past_data[naming.PLAYERS].keys():
+        df_players = past_data[Names.PLAYERS][s]
 
-        df_players = past_data[naming.PLAYERS][s]
-
-        df_players = df_players[settings.SEASONS_COLUMNS_KEEP].copy()
+        df_players = df_players[settings.SEASONS_COLUMNS_RENAME.keys()].copy()
         df_players.rename(columns=settings.SEASONS_COLUMNS_RENAME, inplace=True)
 
         rows = (df_players[Columns.POSITION_NAME] == 'GK')
-        df_players.loc[rows, Columns.POSITION_NAME] = 'GKP'
+        df_players.loc[rows, Columns.POSITION_NAME] = Names.GOALKEEPER
 
-        df_teams = past_data[naming.TEAMS][s]
-        df_teams = df_teams[settings.SEASONS_TEAMS_COLUMNS_KEEP].copy()
+        df_teams = past_data[Names.TEAMS][s]
+        df_teams = df_teams[settings.SEASONS_TEAMS_COLUMNS_RENAME.keys()].copy()
         df_teams.rename(columns=settings.SEASONS_TEAMS_COLUMNS_RENAME, inplace=True)
 
         # Merge by team name (no team_id in df_players)
@@ -234,11 +230,11 @@ def prepare_players_past_data(
         df_opponent = df_teams.drop_duplicates(subset=[Columns.TEAM_ID])
         df_players = df_players.merge(
             df_opponent, left_on=Columns.OPPONENT_ID, right_on=Columns.TEAM_ID, how='left',
-            suffixes=('', opponent_suffix)
+            suffixes=('', Names.OPPONENT_SUFFIX)
             ) # team_id_opp, team_name_opp
         df_players.drop(
             columns=[
-                Columns.TEAM_ID, Columns.OPPONENT_ID, Columns.TEAM_ID + opponent_suffix
+                Columns.TEAM_ID, Columns.OPPONENT_ID, Columns.TEAM_ID + Names.OPPONENT_SUFFIX
             ], inplace=True
         )
 
@@ -250,7 +246,7 @@ def prepare_players_past_data(
 
     if store:
         for s in players_past_data.keys():
-            file_path = settings.PAST_STORE_CLEAN.format(season=s)
+            file_path = settings.STORE_FILE_PATH[Names.CLEAN][Names.PAST].format(season=s)
             data_store.save_df_to_csv(players_past_data[s], file_path, overwrite=True)
 
     return players_past_data
