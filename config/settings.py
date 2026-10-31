@@ -199,33 +199,44 @@ FEATURES_FORM = [c + Names.FORM_SUFFIX for c in FEATURES]
 
 ML_FEATURES_POS = {
     Names.GOALKEEPER: [
-        Columns.MINUTES, Columns.EXPECTED_GOALS_CONCEDED, Columns.CLEAN_SHEETS,
-        Columns.BONUS_POINTS, Columns.SAVES, Columns.FDR_DEF,
+        Columns.MINUTES,
+        Columns.EXPECTED_GOALS_CONCEDED, Columns.CLEAN_SHEETS,
+        Columns.SAVES, Columns.FDR_DEF,
+        Columns.BONUS_POINTS,
         # Columns.YELLOW_CARDS, Columns.RED_CARDS, Columns.PENALTIES_SAVED, Columns.OWN_GOALS,
-        Columns.POINTS
+        # Columns.POINTS
         ],
     Names.DEFENDER: [
-        Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.EXPECTED_GOALS_CONCEDED,
-        Columns.CLEAN_SHEETS, Columns.BONUS_POINTS, Columns.FDR_DEF, Columns.FDR_OFF,
+        Columns.MINUTES,
+        Columns.EXPECTED_GOALS_CONCEDED, Columns.CLEAN_SHEETS,
+        Columns.FDR_DEF,
+        Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.FDR_OFF,
+        Columns.BONUS_POINTS,
         # Columns.YELLOW_CARDS, Columns.RED_CARDS, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
-        Columns.POINTS
+        # Columns.POINTS
         ],
     Names.MIDFIELDER: [
-        Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.CLEAN_SHEETS,
-        Columns.BONUS_POINTS, Columns.FDR_DEF, Columns.FDR_OFF,
+        Columns.MINUTES,
+        Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.FDR_OFF,
+        Columns.CLEAN_SHEETS, Columns.FDR_DEF,
+        Columns.BONUS_POINTS,
         # Columns.YELLOW_CARDS, Columns.RED_CARDS, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
-        Columns.POINTS
+        # Columns.POINTS
         ],
     Names.FORWARD: [
-        Columns.MINUTES, Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.BONUS_POINTS,
-        Columns.FDR_OFF,
+        Columns.MINUTES,
+        Columns.EXPECTED_GOALS, Columns.EXPECTED_ASSISTS, Columns.FDR_OFF,
+        Columns.BONUS_POINTS,
         # Columns.YELLOW_CARDS, Columns.RED_CARDS, Columns.PENALTIES_MISSED, Columns.OWN_GOALS,
-        Columns.POINTS
+        # Columns.POINTS
         ]
 }
 ML_FEATURES_POS_FORM = {}
 for pos, ft in ML_FEATURES_POS.items():
     ML_FEATURES_POS_FORM[pos] = [c + Names.FORM_SUFFIX for c in ft if Names.FIXTURE_DIFFICULTY not in c]
+    for c in ft:
+        if Names.FIXTURE_DIFFICULTY in c:
+            ML_FEATURES_POS_FORM[pos].append(c)
 
 POINTS_COEFFICIENTS = {
     Names.ASSIST: 3, Columns.PENALTIES_SAVED: 5, Columns.PENALTIES_MISSED: 2,

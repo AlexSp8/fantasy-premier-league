@@ -32,11 +32,19 @@ def set_predictions(
     df_predict = df_predict.groupby(Columns.PLAYER_CODE, as_index=False).agg(
         player_name=(Columns.PLAYER_NAME, 'first'), position_name=(Columns.POSITION_NAME, 'first'),
         team_name=(Columns.TEAM_NAME, 'first'), player_cost=(Columns.PLAYER_COST, 'first'),
+        # xG_form=(Columns.EXPECTED_GOALS_FORM, 'first'),
+        # xA_form=(Columns.EXPECTED_ASSISTS_FORM, 'first'),
+        # xGC_form=(Columns.EXPECTED_GOALS_CONCEDED_FORM, 'first'),
         xPTS_predicted_sum=(Columns.EXPECTED_POINTS_PREDICTED, 'sum'),
         # availability=('availability', 'first'),
         # xP_FPL_sum=('xP_FPL', 'sum'),
         )
-    df_predict = df_predict.sort_values(by=[Columns.TEAM_NAME, Columns.POSITION_NAME], ascending=[True, True])
+
+    col = Columns.EXPECTED_POINTS_PREDICTED + '_sum'
+
+    df_predict = df_predict.sort_values(
+        by=[col, Columns.TEAM_NAME, Columns.POSITION_NAME], ascending=[False, True, True]
+        )
 
     # print(df_predict.info())
 

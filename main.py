@@ -38,6 +38,15 @@ def main() -> None:
 
     df_predict = predictions.set_predictions(df_features, df_features_past, fpl_settings, store=True)
 
+    # keep = (
+    #     (df_predict[Columns.TEAM_NAME] != 'LIV') &
+    #     (
+    #         (df_predict[Columns.TEAM_NAME] != 'BHA') |
+    #         (df_predict[Columns.POSITION_NAME] != 'DEF')
+    #     )
+    #     )
+    # df_predict = df_predict[keep]
+
     df_team = optimize.select_team(df_predict, fpl_settings.metric, store=True)
     # df_starters = optimize.select_starters(df_team, fpl_settings.metric)
     df_starters = optimize.select_starters(df_predict, fpl_settings.metric, store=True)

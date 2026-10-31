@@ -58,7 +58,7 @@ class Names(StrEnum):
     MISSES = 'MIS'
     DEFENSIVE_CONTRIBUTIONS = 'DC'
     PENALTY = 'PEN'
-    FIXTURE_DIFFICULTY = 'fdr'
+    FIXTURE_DIFFICULTY = 'FDR'
     OFFENSE = 'off'
     DEFENSE = 'def'
 
