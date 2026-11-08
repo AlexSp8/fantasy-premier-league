@@ -26,17 +26,15 @@ def main() -> None:
 
     live_data = fetch.fetch_live_data(store=True)
 
-    df_players = prepare.prepare_live_data(live_data, fpl_settings, store=True)
+    players_data = prepare.prepare_live_data(live_data, fpl_settings.n_fixtures, store=True)
 
-    df_features = features.add_features_live(df_players, fpl_settings, store=True)
-
-    df_features_past = None
     if fpl_settings.prediction_model != Names.FORMULA:
         past_data = fetch.fetch_past_data(store=True)
-        players_past_data = prepare.prepare_past_data(past_data, store=True)
-        df_features_past = features.add_features_past(players_past_data, fpl_settings, store=True)
+        players_data = prepare.add_past_data(players_data, past_data, store=True)
 
-    df_predict = predictions.set_predictions(df_features, df_features_past, fpl_settings, store=True)
+    df_features = features.add_features(players_data, fpl_settings, store=True)
+
+    df_predict = predictions.set_predictions(df_features, fpl_settings, store=True)
 
     # keep = (
     #     (df_predict[Columns.TEAM_NAME] != 'LIV') &

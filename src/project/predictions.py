@@ -5,91 +5,79 @@ import pandas as pd
 
 from config.naming import Names
 from config.settings import FPLSettings, Columns, ML_FEATURES_POS_FORM, PAST_SEASONS
-from config.settings import POINTS_COEFFICIENTS, POINTS_COEFFICIENTS_POS
+from config.settings import POINTS_COEFFICIENTS, POINTS_COEFFICIENTS_POS, CURRENT_SEASON
 from src.data import data_store
 from src.models.ml_model import MLModel, XGBModel
 
 
 def set_predictions(
-    df_features: pd.DataFrame, df_features_past: pd.DataFrame,
-    fpl_settings: FPLSettings, store: bool = True
+    df_features: pd.DataFrame, fpl_settings: FPLSettings, store: bool = True
     ) -> pd.DataFrame:
     """Set players points predictions based on the analytical formula or a ML model.
     Args:
-        df_features: The pd.DataFrame of live features.
-        df_features_past: The pd.DataFrame of past features.
+        df_features: The pd.DataFrame of live and past features.
         fpl_settings: The FPLSettings instance specifying constraints and settings.
         store (optional): Boolean indicating whether to store data or not.
     Returns:
         A pd.DataFrame of live features and players points predictions."""
 
     if fpl_settings.prediction_model == Names.FORMULA:
-        df_predict = set_fpl_formula_predictions(df_features)
+        is_upcoming = (df_features[Columns.IS_FINISHED] == False)
+        df_predict = df_features[is_upcoming]
+        df_predict[Columns.POINTS_PREDICTED] = set_expected_points(df_predict)
     elif fpl_settings.prediction_model == Names.XGBOOST:
-        target = fpl_settings.ml_target
-        df_predict = set_fpl_ml_predictions(df_features, df_features_past, target)
+        df_predict = set_fpl_ml_predictions(df_features, fpl_settings.ml_target)
+
+    col = Columns.POINTS_PREDICTED
+    cols = [
+        Columns.SEASON, Columns.PLAYER_CODE, Columns.PLAYER_COST, Columns.PLAYER_NAME,
+        Columns.TEAM_NAME, Columns.POSITION_NAME, Columns.GAMEWEEK, col
+        ]
+    df_predict = df_predict[cols]
+    if store:
+        file_path = "fpl_data/predict/players_predictions.csv"
+        data_store.save_df_to_csv(df_predict, file_path, overwrite=True)
 
     df_predict = df_predict.groupby(Columns.PLAYER_CODE, as_index=False).agg(
         player_name=(Columns.PLAYER_NAME, 'first'), position_name=(Columns.POSITION_NAME, 'first'),
         team_name=(Columns.TEAM_NAME, 'first'), player_cost=(Columns.PLAYER_COST, 'first'),
-        # xG_form=(Columns.EXPECTED_GOALS_FORM, 'first'),
-        # xA_form=(Columns.EXPECTED_ASSISTS_FORM, 'first'),
-        # xGC_form=(Columns.EXPECTED_GOALS_CONCEDED_FORM, 'first'),
-        xPTS_predicted_sum=(Columns.EXPECTED_POINTS_PREDICTED, 'sum'),
-        # availability=('availability', 'first'),
-        # xP_FPL_sum=('xP_FPL', 'sum'),
+        PTS_predicted_sum=(Columns.POINTS_PREDICTED, 'sum'),
         )
 
-    col = Columns.EXPECTED_POINTS_PREDICTED + '_sum'
-
-    df_predict = df_predict.sort_values(
-        by=[col, Columns.TEAM_NAME, Columns.POSITION_NAME], ascending=[False, True, True]
-        )
-
-    # print(df_predict.info())
+    df_predict = df_predict.sort_values(by=col + '_sum', ascending=False)
 
     if store:
-        file_path = "fpl_data/predict/players_data_xP.csv"
+        file_path = "fpl_data/predict/players_predictions_sum.csv"
         data_store.save_df_to_csv(df_predict, file_path, overwrite=True)
 
     return df_predict
 
-def set_fpl_formula_predictions(df_features: pd.DataFrame) -> pd.DataFrame:
-    """Set players points predictions based on the analytical points formulas.
-    Args:
-        df_features: The pd.DataFrame of live features.
-    Returns:
-        A pd.DataFrame of players points predictions."""
-
-    df = df_features.copy()
-    df[Columns.EXPECTED_POINTS_PREDICTED] = set_expected_points(df_features)
-
-    return df
-
-def set_expected_points(df_features: pd.DataFrame) -> pd.Series:
+def set_expected_points(df: pd.DataFrame) -> pd.Series:
     """Set the expected players points based on expected values of the related quantities.
     Args:
-        df_features: The pd.DataFrame of live features.
+        df: The pd.DataFrame of live features.
     Returns:
         A pd.Series of the expected players points."""
 
-    fdr_off = df_features[Columns.FDR_OFF]
-    fdr_def = df_features[Columns.FDR_DEF]
+    off_team = df[Columns.OFFENSE_TEAM_FORM]
+    def_team = df[Columns.DEFENSE_TEAM_FORM]
+    off_opp = df[Columns.OFFENSE_OPPONENT_FORM]
+    def_opp = df[Columns.DEFENSE_OPPONENT_FORM]
 
-    xMIN = df_features[Columns.MINUTES_FORM]
+    xMIN = df[Columns.MINUTES_FORM]
 
-    xG = df_features[Columns.EXPECTED_GOALS_FORM]/fdr_off
-    xA = df_features[Columns.EXPECTED_ASSISTS_FORM]/fdr_off
-    xGC = df_features[Columns.EXPECTED_GOALS_CONCEDED_FORM]*fdr_def
-    xSA = df_features[Columns.SAVES_FORM]*fdr_def
-    xCS = df_features[Columns.CLEAN_SHEETS_FORM]/fdr_def
-    xDC = df_features[Columns.DEFENSIVE_CONTRIBUTIONS_FORM]*fdr_def
-    xPS = df_features[Columns.PENALTIES_SAVED_FORM]
-    xBP = df_features[Columns.BONUS_POINTS_FORM]
-    xYC = df_features[Columns.YELLOW_CARDS_FORM]
-    xRC = df_features[Columns.RED_CARDS_FORM]
-    xOG = df_features[Columns.OWN_GOALS_FORM]
-    xPM = df_features[Columns.PENALTIES_MISSED_FORM]
+    xG = df[Columns.EXPECTED_GOALS_FORM]*(off_team/def_opp)
+    xA = df[Columns.EXPECTED_ASSISTS_FORM]*(off_team/def_opp)
+    xGC = df[Columns.EXPECTED_GOALS_CONCEDED_FORM]*(off_opp/def_team)
+    xCS = df[Columns.CLEAN_SHEETS_FORM]*(def_team/off_opp)
+    xSA = df[Columns.SAVES_FORM]*off_opp
+    xDC = df[Columns.DEFENSIVE_CONTRIBUTIONS_FORM]*off_opp
+    xPS = df[Columns.PENALTIES_SAVED_FORM]
+    xBP = df[Columns.BONUS_POINTS_FORM]
+    xYC = df[Columns.YELLOW_CARDS_FORM]
+    xRC = df[Columns.RED_CARDS_FORM]
+    xOG = df[Columns.OWN_GOALS_FORM]
+    xPM = df[Columns.PENALTIES_MISSED_FORM]
 
     cxA = POINTS_COEFFICIENTS[Names.ASSIST]
     cxPS = POINTS_COEFFICIENTS[Columns.PENALTIES_SAVED]
@@ -125,65 +113,68 @@ def set_expected_points(df_features: pd.DataFrame) -> pd.Series:
     xMIN_more_than_60 = xMIN >= cxMIN_bar
     xC[xMIN_more_than_60] += (cxMIN_high-cxMIN_low)
 
-    xP = pd.Series(index=df_features.index, dtype=float)
+    xP = pd.Series(index=df.index, dtype=float)
 
-    gkp_mask = df_features[Columns.POSITION_NAME] == Names.GOALKEEPER
+    gkp_mask = df[Columns.POSITION_NAME] == Names.GOALKEEPER
     xP[gkp_mask] = cxG_gkp*xG - cxGC*xGC + cxSA*xSA + cxCS_gkp*xCS + xC
 
-    def_mask = df_features[Columns.POSITION_NAME] == Names.DEFENDER
+    def_mask = df[Columns.POSITION_NAME] == Names.DEFENDER
     xP[def_mask] = cxG_def*xG - cxGC*xGC + cxCS_def*xCS + xC
     xDC10 = xDC >= cxDC_bar_def
     xP[def_mask & xDC10] += cxDC
 
-    mid_mask = df_features[Columns.POSITION_NAME] == Names.MIDFIELDER
+    mid_mask = df[Columns.POSITION_NAME] == Names.MIDFIELDER
     xP[mid_mask] = cxG_mid*xG + cxCS_mid*xCS + xC
     xDC12 = xDC >= cxDC_bar_mid
     xP[mid_mask & xDC12] += cxDC
 
-    fwd_mask = df_features[Columns.POSITION_NAME] == Names.FORWARD
+    fwd_mask = df[Columns.POSITION_NAME] == Names.FORWARD
     xP[fwd_mask] = cxG_fwd*xG + xC
     xP[fwd_mask & xDC12] += cxDC
 
     return xP
 
-def set_fpl_ml_predictions(
-    df_features: pd.DataFrame, df_features_past: pd.DataFrame, target: str
-    ) -> pd.DataFrame:
+def set_fpl_ml_predictions(df_features: pd.DataFrame, target: str) -> pd.DataFrame:
     """Set points predictions for each player based on a ML model for each player position.
     Args:
-        df_features: The pd.DataFrame of live features.
-        df_features_past: The pd.DataFrame of past features.
+        df_features: The pd.DataFrame of features.
         target: The target column for ML predictions.
     Returns:
         A pd.DataFrame of the ML points predictions for each player."""
 
-    df = df_features.copy()
-    df[Columns.EXPECTED_POINTS_PREDICTED] = pd.Series(dtype=float)
+    is_upcoming = (df_features[Columns.IS_FINISHED] == False)
+    df_predict = df_features[is_upcoming].copy()
+    df_predict[Columns.POINTS_PREDICTED] = pd.Series(dtype=float)
 
-    test_split = (Columns.SEASON, PAST_SEASONS[-1])
+    is_finished = (df_features[Columns.IS_FINISHED] == True)
+    df_finished = df_features[is_finished]
+
+    # test_split = (Columns.SEASON, PAST_SEASONS[-1])
+    test_split = (Columns.SEASON, CURRENT_SEASON)
     for pos, ft in ML_FEATURES_POS_FORM.items():
 
-        df_pos = df_features_past[df_features_past[Columns.POSITION_NAME] == pos]
+        df_pos = df_finished[df_finished[Columns.POSITION_NAME] == pos]
 
         # compare with baseline (target form)
-        test_model = set_position_model(df_pos, ft, target, test_split)
         base_model = set_base_model(df_pos, target, test_split)
-        metrics = evaluate_position_model(test_model, base_model)
+        xgb_model = set_position_model(df_pos, ft, target, test_split)
+        metrics = evaluate_position_model(xgb_model, base_model)
 
-        print(f"\n{pos}")
-        for key, value in metrics.items():
-            print(f"{key}: {value}")
+        compare_models(metrics, pos)
+
+        # for key, value in metrics.items():
+        #     print(f"{key}: {value}")
 
         # all data for training
         xgb_model = set_position_model(df_pos, ft, target, test_split=None)
         imp = xgb_model.get_features_importances()
-        print(f"\n{pos} features importance\n{imp.sort_values(ascending=False)}")
+        print(f"{pos} FEATURES IMPORTANCE\n{imp.sort_values(ascending=False)}")
 
-        rows = (df[Columns.POSITION_NAME] == pos)
+        rows = (df_predict[Columns.POSITION_NAME] == pos)
         if rows.any():
-            df.loc[rows, Columns.EXPECTED_POINTS_PREDICTED] = predict_position_points(df, xgb_model, rows)
+            df_predict.loc[rows, Columns.POINTS_PREDICTED] = predict_position_points(df_predict, xgb_model, rows)
 
-    return df
+    return df_predict
 
 def set_position_model(
     df_pos: pd.DataFrame, features: list[str], target: str, test_split: tuple[str, Any] | None = None,
@@ -201,7 +192,7 @@ def set_position_model(
 
     xgb_model.split_historical_data(test_split)
 
-    xgb_model.set_xgboost_model(n_estimators=100, max_depth=3, learning_rate=0.1)
+    xgb_model.set_xgboost_model(n_estimators=100, max_depth=6, learning_rate=0.1)
 
     return xgb_model
 
@@ -222,11 +213,11 @@ def set_base_model(
 
     return base_model
 
-def evaluate_position_model(test_model: XGBModel, base_model: XGBModel) -> dict[str, dict[str, float]]:
+def evaluate_position_model(xgb_model: XGBModel, base_model: XGBModel) -> dict[str, dict[str, float]]:
     """Evaluate the XGBoost model (fitted and baseline) metrics.
     Args:
-        test_model: The fitted XGBModel instance.
-        test_model: The baseline XGBModel instance.
+        xgb_model: The fitted XGBModel instance.
+        base_model: The baseline XGBModel instance.
     Returns:
         The dictionary of fitted and baseline model metrics."""
 
@@ -236,10 +227,29 @@ def evaluate_position_model(test_model: XGBModel, base_model: XGBModel) -> dict[
     y_pred = base_model.X_test[col]
     metrics['base'] = base_model.get_model_errors(y_pred)
 
-    y_pred = test_model.model.predict(test_model.X_test)
-    metrics['test'] = test_model.get_model_errors(y_pred)
+    y_pred = xgb_model.model.predict(xgb_model.X_test)
+    metrics['xgb'] = xgb_model.get_model_errors(y_pred)
 
     return metrics
+
+def compare_models(metrics: dict[str, dict[str, float]], pos: str) -> None:
+    """Displays a side-by-side comparison table of Base Model vs. XGBoost."""
+
+    df = pd.DataFrame(metrics)
+
+    df.index = df.index.str.upper()
+
+    df['change'] = df['base'] - df['xgb']
+    df.loc['R2', 'change'] *= -1
+
+    df['% change'] = ((df['change'])/df['base'])*100
+    df.loc['R2', '% change'] = ((df.loc['R2', 'change'])/df.loc['R2', 'xgb'])*100
+
+    print("\n" + "-"*50)
+    print(f"{pos} MODEL COMPARISON")
+    print("-"*50)
+    print(df.to_string(float_format=lambda x: "  {:.4f}".format(x)))
+    print("-"*50)
 
 def predict_position_points(df_features: pd.DataFrame, xgb_model: XGBModel, rows: pd.Series) -> pd.Series:
     """Predict player points using the XGBModel for a player position.

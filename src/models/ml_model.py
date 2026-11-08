@@ -4,7 +4,7 @@ from typing import Any
 from numpy.typing import ArrayLike
 import pandas as pd
 from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error
+from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 
 
@@ -63,18 +63,29 @@ class MLModel:
         self.y_test = self.df.loc[is_test, self.target]
 
     def get_model_errors(self, y_pred: ArrayLike) -> dict[str, float]:
-        """Calculates the MAE and RMSE as model prediction metrics.
+        """Calculate model prediction metrics.
         Args:
             y_pred: The ArrayLike of the predicted values of the target.
         Returns:
-            A dictionary of the MAE and RMSE for the model's predictions."""
+            A dictionary of model prediction metrics."""
 
         self._check_is_not_none(self.y_test)
 
-        mae = mean_absolute_error(self.y_test, y_pred)
-        rmse = root_mean_squared_error(self.y_test, y_pred)
+        mae = metrics.mean_absolute_error(self.y_test, y_pred)
+        rmse = metrics.root_mean_squared_error(self.y_test, y_pred)
+        r2 = metrics.r2_score(self.y_test, y_pred)
+        # mape = metrics.mean_absolute_percentage_error(self.y_test, y_pred)
+        med_ae = metrics.median_absolute_error(self.y_test, y_pred)
+        max_err = metrics.max_error(self.y_test, y_pred)
 
-        predictions = {'mae': mae, 'rmse': rmse}
+        predictions = {
+            'mae': mae,
+            'rmse': rmse,
+            'r2': r2,
+            # 'mape': mape,
+            'median_ae': med_ae,
+            'max_error': max_err
+        }
 
         return predictions
 
@@ -110,7 +121,7 @@ class XGBModel(MLModel):
         self.model = None
 
     def set_xgboost_model(
-        self, n_estimators: int = 100, max_depth: int = 3, learning_rate: float = 0.1
+        self, n_estimators: int = 100, max_depth: int = 6, learning_rate: float = 0.3
         ) -> None:
         """Train the XGBoost model with the specified parameters.
         Args:
